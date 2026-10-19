@@ -4,7 +4,7 @@ A kick drum and bass generator for EDM, built as a VST3 instrument for Windows 1
 
 ## Features
 
-- **Oscillator:** Sine, Triangle, Saw and Square (band-limited), with a Tune knob (30–120 Hz, shown with the note name).
+- **Oscillator:** Sine, Triangle, Saw, Square, Supersaw (7 detuned saws), Reese (2 beating detuned saws) and FM (2:1 growl that follows the envelope), with a Tune knob (30–120 Hz, shown with the note name).
 - **Pitch envelope:** Pitch Amount (0–48 semitones) and Pitch Time (5–500 ms).
 - **Amp envelope:** Attack, Decay, Sustain, Release.
   - Sustain at 0% makes each note a one-shot kick that always plays its full decay.
@@ -12,6 +12,7 @@ A kick drum and bass generator for EDM, built as a VST3 instrument for Windows 1
 - **Character:** Click (noise and tone transient) and Drive (tanh saturation).
 - **Compressor:** Threshold, Ratio, Makeup and an In/Out switch, plus a gain-reduction meter.
 - **Output:** Volume, a Mono/Stereo switch (stereo widens the upper harmonics and keeps the low end mono), a soft output ceiling and a VU meter.
+- **Look:** orange-and-yellow light-up console with backlit knob rings, an output level LED bar and the SPUD-01 potato emblem.
 - **Display:** shows the rendered sound. Its Amp, Pitch and Comp tabs each have points you can drag with the mouse, and the Wave tab shows the live output as a scrolling, colour-coded waveform.
 - **MIDI:** Key Track (C1 plays the Tune pitch, other notes transpose from there) and Velocity on/off. Works on any MIDI track, for example in Cubase.
 - **100 factory presets:** 10 each for House, Tech-House, Techno, EDM, Festival, Progressive, Drum & Bass, Dubstep, Analog and Trap. They're also exposed to the DAW's program list.

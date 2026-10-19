@@ -27,7 +27,7 @@ namespace pk
         inline constexpr const char* velocity = "velocity";
     }
 
-    inline const juce::StringArray waveNames { "SINE", "TRI", "SAW", "SQR" };
+    inline const juce::StringArray waveNames { "SINE", "TRI", "SAW", "SQR", "SUPER", "REESE", "FM" };
 
     inline juce::String noteName (float hz)
     {

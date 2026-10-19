@@ -88,6 +88,9 @@ namespace pk
             slot->age = counter;
             slot->vel = prm.velocity ? (float) velocity / 127.0f : 1.0f;
             slot->ratio = prm.keytrack ? std::exp2 ((float) (note - 36) / 12.0f) : 1.0f;
+            // fixed start phases for the detuned saws so every hit sounds the same
+            static const float startPh[6] { 0.13f, 0.71f, 0.42f, 0.88f, 0.27f, 0.59f };
+            std::copy (std::begin (startPh), std::end (startPh), slot->ph2);
         }
 
         void noteOff (int note) noexcept
@@ -145,7 +148,7 @@ namespace pk
 
                     const float f = prm.tune * v.ratio * std::exp2 (oct * std::exp (-v.t / tau));
                     const float pd = std::min (0.45f, f * dt);
-                    float s = osc (prm.wave, v.ph, pd) * e * 0.9f;
+                    float s = voiceOsc (v, prm.wave, pd, e) * e * 0.9f;
                     v.ph += pd;
                     if (v.ph >= 1.0f) v.ph -= 1.0f;
 
@@ -199,6 +202,7 @@ namespace pk
             bool active = false, gate = true, fading = false;
             int note = 36;
             uint32_t age = 0;
+            float ph2[6] {};
             float vel = 1.0f, ratio = 1.0f, t = 0.0f, ph = 0.0f, rt = 0.0f, rl = 0.0f, lv = 1.0f, fade = 1.0f, hx = 0.0f, hy = 0.0f;
         };
 
@@ -208,6 +212,42 @@ namespace pk
             const float a = std::abs (x);
             if (a <= 0.8f) return x;
             return std::copysign (0.8f + 0.2f * std::tanh ((a - 0.8f) / 0.2f), x);
+        }
+
+        static float saw (float p, float dt) noexcept
+        {
+            float q = p + 0.5f; if (q >= 1.0f) q -= 1.0f;
+            return 2.0f * q - 1.0f - blep (q, dt);
+        }
+
+        // Oscillator for one voice. 0-3: sine, triangle, saw, square. 4: supersaw (7 detuned saws),
+        // 5: reese (2 detuned saws), 6: FM (sine with a 2:1 modulator whose depth follows the amp envelope)
+        static float voiceOsc (Voice& v, int w, float dt, float env) noexcept
+        {
+            if (w < 4) return osc (w, v.ph, dt);
+            if (w == 6)
+            {
+                float m = v.ph * 2.0f; m -= std::floor (m);
+                const float index = 0.6f + 2.4f * env;   // brighter on the attack, rounder in the tail
+                return std::sin (6.2831853f * v.ph + index * std::sin (6.2831853f * m));
+            }
+            auto advance = [] (float& p, float inc) { p += inc; if (p >= 1.0f) p -= 1.0f; };
+            if (w == 5)
+            {
+                const float inc = dt * 1.0075f;
+                const float y = 0.55f * (saw (v.ph, dt) + saw (v.ph2[0], inc));
+                advance (v.ph2[0], inc);
+                return y;
+            }
+            static const float detune[6] { -0.0110f, -0.0064f, -0.0020f, 0.0021f, 0.0066f, 0.0108f };
+            float sides = 0.0f;
+            for (int k = 0; k < 6; ++k)
+            {
+                const float inc = dt * (1.0f + detune[k]);
+                sides += saw (v.ph2[k], inc);
+                advance (v.ph2[k], inc);
+            }
+            return 0.5f * saw (v.ph, dt) + 0.2f * sides;
         }
 
         static float blep (float t, float dt) noexcept

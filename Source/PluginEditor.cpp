@@ -7,18 +7,22 @@ using namespace juce;
 // Palette and fonts
 namespace col
 {
-    const Colour page    { 0xff0a0a0b };
-    const Colour ink     { 0xffe0dcd3 };
-    const Colour inkDim  { 0xff8f8b84 };
-    const Colour amber   { 0xffffb547 };
-    const Colour amberHi { 0xffffd58a };
-    const Colour led     { 0xffff2b1e };
-    const Colour ledOff  { 0xff3a0e0b };
-    const Colour go      { 0xff36d46d };
-    const Colour cream   { 0xfff7e6bd };
-    const Colour tick    { 0xffd2cdc3 };
-    const Colour faceInk { 0xff2a1d0c };
-    const Colour faceRed { 0xffc4241a };
+    // HUD palette: near-black panels with glowing orange accents
+    const Colour page    { 0xff070707 };
+    const Colour ink     { 0xffffb35e };   // labels
+    const Colour inkDim  { 0xff9a7658 };   // values and secondary text
+    const Colour amber   { 0xffff8a1e };   // primary accent
+    const Colour amberHi { 0xffffc27a };   // hot highlight
+    const Colour led     { 0xffff7a12 };
+    const Colour ledOff  { 0xff2c1406 };
+    const Colour go      { 0xffff8a1e };
+    const Colour cream   { 0xffffa040 };   // lit buttons and tabs
+    const Colour tick    { 0xffb3a493 };
+    const Colour faceInk { 0xffff9a3c };
+    const Colour faceRed { 0xffff3d1a };
+    const Colour line    { 0xffff8a1e };   // tile borders and brackets (used with low alpha)
+    const Colour orange  { 0xffff7212 };   // start of the orange -> yellow light ramp
+    const Colour yellow  { 0xffffd23f };   // end of the ramp
 }
 
 namespace
@@ -47,13 +51,13 @@ namespace
         {
             g.setGradientFill (ColourGradient (col::led.withAlpha (0.45f), c.x, c.y, col::led.withAlpha (0.0f), c.x + r.getWidth() * 1.4f, c.y, true));
             g.fillEllipse (r.expanded (r.getWidth() * 0.9f));
-            ColourGradient gr (Colour (0xffffd2c8), c.x - r.getWidth() * 0.12f, c.y - r.getHeight() * 0.15f, Colour (0xffa3120b), c.x + r.getWidth() * 0.5f, c.y, true);
+            ColourGradient gr (Colour (0xfffff3c8), c.x - r.getWidth() * 0.12f, c.y - r.getHeight() * 0.15f, Colour (0xffa84300), c.x + r.getWidth() * 0.5f, c.y, true);
             gr.addColour (0.45, col::led);
             g.setGradientFill (gr);
         }
         else
         {
-            g.setGradientFill (ColourGradient (Colour (0xff5a1712), c.x - r.getWidth() * 0.1f, c.y - r.getHeight() * 0.15f, col::ledOff, c.x + r.getWidth() * 0.5f, c.y, true));
+            g.setGradientFill (ColourGradient (Colour (0xff4a2208), c.x - r.getWidth() * 0.1f, c.y - r.getHeight() * 0.15f, col::ledOff, c.x + r.getWidth() * 0.5f, c.y, true));
         }
         g.fillEllipse (r);
         g.setColour (Colours::black);
@@ -71,8 +75,8 @@ namespace
 
     void insetWindow (Graphics& g, Rectangle<float> r)
     {
-        g.setColour (Colour (0xff2a2a2e)); g.fillRoundedRectangle (r.expanded (1.0f), 4.0f);
-        g.setColour (Colour (0xff050404)); g.fillRoundedRectangle (r, 3.0f);
+        g.setColour (col::line.withAlpha (0.35f)); g.fillRoundedRectangle (r.expanded (1.0f), 4.0f);
+        g.setColour (Colour (0xff080504)); g.fillRoundedRectangle (r, 3.0f);
         g.setGradientFill (ColourGradient (Colours::black.withAlpha (0.8f), r.getX(), r.getY(), Colours::transparentBlack, r.getX(), r.getY() + 7.0f, false));
         g.fillRoundedRectangle (r, 3.0f);
     }
@@ -96,7 +100,7 @@ namespace
         {
             const float rn = rB + (rO - 5.0f - rB) * 0.5f + 2.0f;
             g.setFont (label (size * 0.084f * 1.15f));
-            g.setColour (Colour (0xffd8d3c9));
+            g.setColour (Colour (0xffd9c4ad));
             for (int j = 0; j <= 10; ++j)
             {
                 const auto p = polar (c, rn, -135.0f + j * 27.0f);
@@ -123,85 +127,116 @@ namespace
         g.setColour (Colour (0xfff5f1e8));
         g.drawLine (p1.x, p1.y, p2.x, p2.y, jmax (2.0f, size * 0.026f));
     }
-    // Envelope knob: the black Shadow Hills style knob with a backlit light-pipe ring set into a groove.
-    // The ring, the lit scale ticks and the under-glow get brighter and shift toward a lighter tint as the
-    // knob turns right, and dim back down as it turns left.
-    void drawLitKnob (Graphics& g, Point<float> c, float size, float norm, Colour base, Colour peak, bool numbered = true, bool ticks = true)
+    // Orange -> yellow light ramp used across the whole console (0 = orange, 1 = yellow)
+    Colour ramp (float t) { return col::orange.interpolatedWith (col::yellow, jlimit (0.0f, 1.0f, t)); }
+
+    // Glowing text filled with the orange -> yellow ramp from left to right
+    void glowTextRamp (Graphics& g, const String& s, Rectangle<float> r, Justification j, float glow)
+    {
+        g.setColour (col::orange.withAlpha (glow));
+        for (auto d : { Point<float> (-1, 0), Point<float> (1, 0), Point<float> (0, -1), Point<float> (0, 1) })
+            g.drawText (s, r.translated (d.x, d.y), j, false);
+        g.setGradientFill (ColourGradient (col::orange, r.getX(), 0, col::yellow, r.getRight(), 0, false));
+        g.drawText (s, r, j, false);
+    }
+
+    // Strokes the knob-travel arc between t0 and t1 (0..1 of the 270 degree sweep) in short segments,
+    // each coloured from the ramp, so the light fades from orange at the start to yellow at the end
+    void strokeRampArc (Graphics& g, Point<float> c, float r, float t0, float t1, float width, float alpha, float bright = 0.0f)
+    {
+        const int n = jmax (2, (int) ((t1 - t0) * 72.0f));
+        for (int i = 0; i < n; ++i)
+        {
+            const float a = t0 + (t1 - t0) * (float) i / (float) n, b = t0 + (t1 - t0) * (float) (i + 1) / (float) n;
+            Path seg; seg.addCentredArc (c.x, c.y, r, r, 0.0f, degToRad (-135.0f + 270.0f * a), degToRad (-135.0f + 270.0f * b), true);
+            g.setColour (ramp (0.5f * (a + b)).brighter (bright).withAlpha (jlimit (0.0f, 1.0f, alpha)));
+            g.strokePath (seg, PathStrokeType (width, PathStrokeType::curved, PathStrokeType::butt));
+        }
+    }
+
+    // Full ring lit with the ramp: orange at the bottom, yellow at the top
+    void strokeRampRing (Graphics& g, Point<float> c, float r, float width, float alpha)
+    {
+        for (int i = 0; i < 72; ++i)
+        {
+            const float a = i * 5.0f, b = a + 5.0f;
+            Path seg; seg.addCentredArc (c.x, c.y, r, r, 0.0f, degToRad (a), degToRad (b), true);
+            g.setColour (ramp (0.5f * (1.0f + std::cos (degToRad (a + 2.5f)))).withAlpha (alpha));
+            g.strokePath (seg, PathStrokeType (width, PathStrokeType::curved, PathStrokeType::butt));
+        }
+    }
+
+    // Knob: black glossy body with a backlit light-pipe ring. The lit part of the ring and the scale fade from
+    // orange at the start of travel to yellow at the end, and the whole light gets brighter as the knob turns up.
+    void drawLitKnob (Graphics& g, Point<float> c, float size, float norm, bool numbered = true, bool ticks = true)
     {
         const float n = jlimit (0.0f, 1.0f, norm);
-        const float k = 0.25f + 0.75f * n;                       // light intensity
-        const Colour col = base.interpolatedWith (peak, n * 0.75f);
-        const float rO = size * 0.5f - 1.5f;
-        const float rB = size * 0.25f;                           // knob body (slightly smaller to make room for the ring)
-        const float rw = size * 0.034f;                          // light-pipe width
-        const float rR = rB + rw * 0.5f + size * 0.04f;          // light-pipe radius
-        const float a0 = degToRad (-135.0f), a = degToRad (-135.0f + 270.0f * n);
+        const float k = 0.3f + 0.7f * n;                         // light intensity
+        const float rO = size * 0.5f - 1.5f, rB = size * 0.25f;
+        const float rw = size * 0.036f;
+        const float rR = rB + rw * 0.5f + size * 0.04f;
+        const auto box = [&] (float r) { return Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (c); };
 
-        // scale ticks: lit in the accent colour up to the current value
         for (int i = 0; ticks && i <= 40; ++i)
         {
             const bool major = i % 4 == 0;
             const float t = (float) i / 40.0f;
             const bool on = t <= n + 0.0001f && n > 0.001f;
-            const auto p1 = polar (c, major ? rO - 5.0f : rO - 3.0f, -135.0f + 270.0f * t), p2 = polar (c, rO, -135.0f + 270.0f * t);
+            const auto p1 = polar (c, major ? rO - 5.5f : rO - 3.0f, -135.0f + 270.0f * t), p2 = polar (c, rO, -135.0f + 270.0f * t);
             if (on)
             {
-                g.setColour (col.withAlpha (0.25f * k));
-                g.drawLine (p1.x, p1.y, p2.x, p2.y, major ? 3.4f : 2.4f);
+                g.setColour (ramp (t).withAlpha (0.35f * k)); g.drawLine (p1.x, p1.y, p2.x, p2.y, major ? 4.0f : 3.0f);
+                g.setColour (ramp (t).brighter (0.35f));      g.drawLine (p1.x, p1.y, p2.x, p2.y, major ? 1.5f : 1.0f);
             }
-            g.setColour (on ? col.brighter (0.3f).withAlpha (0.55f + 0.45f * k) : col::tick.withAlpha (major ? 0.95f : 0.55f));
-            g.drawLine (p1.x, p1.y, p2.x, p2.y, major ? 1.3f : 0.8f);
+            else
+            {
+                g.setColour (col::tick.withAlpha (major ? 0.75f : 0.4f)); g.drawLine (p1.x, p1.y, p2.x, p2.y, major ? 1.3f : 0.8f);
+            }
         }
 
-        // numbers 0..10, pushed out to sit between the ticks and the ring
-        const float rn = 0.5f * ((rR + rw * 0.5f + 1.2f) + (rO - 5.0f));
-        g.setFont (label (size * 0.084f * 1.15f));
+        const float rn = 0.5f * ((rR + rw * 0.5f + 1.2f) + (rO - 5.5f));
+        g.setFont (label (size * 0.1f));
         for (int j = 0; numbered && j <= 10; ++j)
         {
             const bool on = j / 10.0f <= n + 0.0001f && n > 0.001f;
-            g.setColour (on ? Colour (0xfff2eee6) : Colour (0xffb9b4aa));
-            g.drawText (String (j), Rectangle<float> (12.0f, 10.0f).withCentre (polar (c, rn, -135.0f + j * 27.0f)), Justification::centred, false);
+            g.setColour (on ? ramp (j / 10.0f).brighter (0.55f) : Colour (0xff8f8174));
+            g.drawText (String (j), Rectangle<float> (14.0f, 11.0f).withCentre (polar (c, rn, -135.0f + j * 27.0f)), Justification::centred, false);
         }
 
-        // recessed groove and the dim backlit ring
-        const auto ringBox = [&] (float r) { return Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (c); };
-        g.setColour (Colour (0xff040405)); g.drawEllipse (ringBox (rR), rw + 3.0f);
-        g.setColour (Colours::white.withAlpha (0.06f)); g.drawEllipse (ringBox (rR + rw * 0.5f + 1.6f), 0.8f);
-        g.setColour (col.withAlpha (0.05f + 0.10f * k)); g.drawEllipse (ringBox (rR), rw * 2.4f);
-        g.setColour (col.withAlpha (0.10f + 0.28f * k)); g.drawEllipse (ringBox (rR), rw * 0.8f);
-
-        // value arc with bloom; every layer scales with the knob position
+        // groove, dim backlit ring, then the lit value arc with bloom
+        g.setColour (Colour (0xff040303)); g.drawEllipse (box (rR), rw + 3.0f);
+        strokeRampArc (g, c, rR, 0.0f, 1.0f, rw * 0.8f, 0.10f + 0.12f * k);
         if (n > 0.001f)
         {
-            Path arc; arc.addCentredArc (c.x, c.y, rR, rR, 0.0f, a0, a, true);
-            auto stroke = [&] (float wdt, Colour cc) { g.setColour (cc); g.strokePath (arc, PathStrokeType (wdt, PathStrokeType::curved, PathStrokeType::rounded)); };
-            stroke (rw * 3.6f, col.withAlpha (0.16f * k));
-            stroke (rw * 2.2f, col.withAlpha (0.30f * k));
-            stroke (rw * 1.1f, col.withAlpha (0.55f + 0.40f * k));
-            stroke (rw * 0.7f, col.brighter (0.25f + 0.35f * n));
-            stroke (1.0f, Colours::white.withAlpha (0.25f + 0.55f * n));
+            strokeRampArc (g, c, rR, 0.0f, n, rw * 4.0f, 0.12f * k);
+            strokeRampArc (g, c, rR, 0.0f, n, rw * 2.3f, 0.28f * k);
+            strokeRampArc (g, c, rR, 0.0f, n, rw * 1.1f, 0.65f + 0.35f * k);
+            strokeRampArc (g, c, rR, 0.0f, n, rw * 0.6f, 1.0f, 0.45f);
+            const auto tip = polar (c, rR, -135.0f + 270.0f * n);
+            g.setColour (ramp (n).brighter (0.6f).withAlpha (0.35f)); g.fillEllipse (Rectangle<float> (rw * 3.2f, rw * 3.2f).withCentre (tip));
+            g.setColour (Colour (0xfffff4d6));                     g.fillEllipse (Rectangle<float> (rw * 1.3f, rw * 1.3f).withCentre (tip));
         }
 
-        // light spilling onto the skirt from the ring
-        g.setColour (col.withAlpha (0.10f + 0.30f * k)); g.drawEllipse (ringBox (rB + 2.2f), 1.6f);
+        // light spilling onto the skirt
+        g.setColour (ramp (n).withAlpha (0.12f + 0.3f * k)); g.drawEllipse (box (rB + 2.2f), 1.6f);
 
-        // skirt, glossy body, shine (same finish as the other knobs)
-        g.setGradientFill (ColourGradient (Colour (0xff3c3c41), c.x, c.y - rB - 3, Colours::black, c.x, c.y + rB + 3, false));
-        g.fillEllipse (ringBox (rB + 1.6f));
-        ColourGradient body (Colour (0xff505056), c.x - rB * 0.2f, c.y - rB * 0.4f, Colour (0xff020202), c.x - rB * 0.2f + rB * 1.56f, c.y - rB * 0.4f, true);
-        body.addColour (0.32, Colour (0xff1d1d20));
-        g.setGradientFill (body); g.fillEllipse (ringBox (rB - 1.0f));
-        g.setColour (Colours::black); g.drawEllipse (ringBox (rB - 1.0f), 0.8f);
+        // skirt, glossy body, shine
+        g.setGradientFill (ColourGradient (Colour (0xff3a3632), c.x, c.y - rB - 3, Colours::black, c.x, c.y + rB + 3, false));
+        g.fillEllipse (box (rB + 1.6f));
+        ColourGradient body (Colour (0xff4e4a46), c.x - rB * 0.2f, c.y - rB * 0.4f, Colour (0xff020202), c.x - rB * 0.2f + rB * 1.56f, c.y - rB * 0.4f, true);
+        body.addColour (0.32, Colour (0xff1d1b1a));
+        g.setGradientFill (body); g.fillEllipse (box (rB - 1.0f));
+        g.setColour (Colours::black); g.drawEllipse (box (rB - 1.0f), 0.8f);
         const Point<float> sc (c.x - rB * 0.22f, c.y - rB * 0.4f);
-        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.26f), sc.x, sc.y, Colours::white.withAlpha (0.0f), sc.x + rB * 0.55f, sc.y, true));
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.24f), sc.x, sc.y, Colours::white.withAlpha (0.0f), sc.x + rB * 0.55f, sc.y, true));
         g.fillEllipse (Rectangle<float> (rB * 1.1f, rB * 0.6f).withCentre (sc));
 
-        // pointer: white line over a soft glow in the accent colour
+        // pointer: lit line in the ramp colour for the current position
         const auto p1 = polar (c, rB * 0.15f, -135.0f + 270.0f * n), p2 = polar (c, rB - 3.0f, -135.0f + 270.0f * n);
-        g.setColour (col.withAlpha (0.20f + 0.45f * k)); g.drawLine (p1.x, p1.y, p2.x, p2.y, 5.0f);
-        g.setColour (Colour (0xfff5f1e8)); g.drawLine (p1.x, p1.y, p2.x, p2.y, jmax (2.0f, size * 0.026f));
-        g.setColour (col.brighter (0.5f).withAlpha (0.4f + 0.6f * k)); g.fillEllipse (Rectangle<float> (3.6f, 3.6f).withCentre (p2));
+        g.setColour (ramp (n).withAlpha (0.25f + 0.4f * k)); g.drawLine (p1.x, p1.y, p2.x, p2.y, 5.0f);
+        g.setColour (Colour (0xfffff1d8));                   g.drawLine (p1.x, p1.y, p2.x, p2.y, jmax (2.0f, size * 0.026f));
     }
+
 }
 
 //==============================================================================
@@ -227,12 +262,11 @@ public:
     void paint (Graphics& g) override
     {
         const float w = (float) getWidth();
-        g.setColour (col::ink); g.setFont (label (13.5f, 0.12f));
-        g.drawText (name, Rectangle<float> (0, 0, w, 17), Justification::centred, false);
-        if (lit) drawLitKnob (g, { w * 0.5f, 18.0f + size * 0.5f }, size, param.getValue(), accent, accentPeak, size >= 84.0f);
-        else     drawKnob (g, { w * 0.5f, 18.0f + size * 0.5f }, size, param.getValue(), size >= 84.0f);
-        const Colour valueCol = lit ? accent.interpolatedWith (accentPeak, 0.6f) : col::amber;
-        g.setColour (dragging ? valueCol : col::inkDim); g.setFont (mono (11.0f));
+        g.setFont (label (16.0f, 0.1f));
+        glowText (g, name, Rectangle<float> (0, 0, w, 17), Justification::centred, col::ink, 0.22f);
+        drawLitKnob (g, { w * 0.5f, 18.0f + size * 0.5f }, size, param.getValue(), size >= 84.0f);
+        const Colour valueCol = ramp (param.getValue()).brighter (0.4f);
+        g.setColour (dragging ? valueCol : Colour (0xffb98c62)); g.setFont (mono (12.5f));
         g.drawText (pk::formatValue (param.getParameterID(), value()), Rectangle<float> (0, 18.0f + size, w, 15), Justification::centred, false);
         if (hasKeyboardFocus (false))
         {
@@ -288,12 +322,14 @@ private:
 };
 
 //==============================================================================
-// Four-position rotary waveform switch with LEDs
+// Seven-position rotary waveform switch with LEDs
 class WaveSwitch : public Component
 {
 public:
+    static constexpr int numWaves = 7;
+
     explicit WaveSwitch (RangedAudioParameter& p)
-        : param (p), attach (p, [this] (float v) { index = jlimit (0, 3, (int) v); repaint(); }, nullptr)
+        : param (p), attach (p, [this] (float v) { index = jlimit (0, numWaves - 1, (int) v); repaint(); }, nullptr)
     {
         attach.sendInitialUpdate();
         setTitle ("Waveform");
@@ -306,25 +342,26 @@ public:
     void paint (Graphics& g) override
     {
         const auto c = centre();
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < numWaves; ++i)
         {
-            drawLed (g, Rectangle<float> (9, 9).withCentre (polar (c, 41, angles[i])), i == index);
-            g.setColour (i == index ? col::ink : col::inkDim); g.setFont (label (12.5f, 0.1f));
-            g.drawText (pk::waveNames[i], Rectangle<float> (40, 14).withCentre (polar (c, 58, angles[i])), Justification::centred, false);
+            drawLed (g, Rectangle<float> (8, 8).withCentre (polar (c, 40, angles[i])), i == index);
+            g.setFont (label (12.5f, 0.04f));
+            if (i == index) glowText (g, pk::waveNames[i], Rectangle<float> (44, 14).withCentre (polar (c, 55, angles[i])), Justification::centred, col::yellow, 0.3f);
+            else { g.setColour (Colour (0xffa47a55)); g.drawText (pk::waveNames[i], Rectangle<float> (44, 14).withCentre (polar (c, 55, angles[i])), Justification::centred, false); }
         }
-        drawLitKnob (g, c, 76.0f, (angles[index] + 135.0f) / 270.0f, Colour (0xffd9dde2), Colours::white, false, false);
-        g.setColour (col::ink); g.setFont (label (12.5f, 0.12f));
-        g.drawText ("WAVEFORM", Rectangle<float> (120, 16).withCentre ({ c.x, c.y + 48 }), Justification::centred, false);
+        drawLitKnob (g, c, 70.0f, (angles[index] + 135.0f) / 270.0f, false, false);
+        g.setFont (label (15.0f, 0.12f));
+        glowText (g, "WAVEFORM", Rectangle<float> (130, 17).withCentre ({ c.x, c.y + 51 }), Justification::centred, col::ink, 0.22f);
     }
 
     void mouseDown (const MouseEvent& e) override
     {
         const auto c = centre();
-        int target = (index + 1) % 4;
-        float best = 16.0f;
-        for (int i = 0; i < 4; ++i)
+        int target = (index + 1) % numWaves;
+        float best = 14.0f;
+        for (int i = 0; i < numWaves; ++i)
         {
-            const float d = e.position.getDistanceFrom (polar (c, 58, angles[i]));
+            const float d = e.position.getDistanceFrom (polar (c, 54, angles[i]));
             if (d < best) { best = d; target = i; }
         }
         attach.setValueAsCompleteGesture ((float) target);
@@ -334,7 +371,7 @@ private:
     RangedAudioParameter& param;
     ParameterAttachment attach;
     int index = 0;
-    const float angles[4] { -66.0f, -22.0f, 22.0f, 66.0f };
+    const float angles[numWaves] { -120.0f, -80.0f, -40.0f, 0.0f, 40.0f, 80.0f, 120.0f };
 };
 
 //==============================================================================
@@ -358,18 +395,19 @@ public:
         const float cx = 50.0f;
         drawLed (g, Rectangle<float> (11, 11).withCentre ({ cx, 7.5f }), on);
         const Point<float> c (cx, 38.0f);
-        g.setColour (col::inkDim); g.setFont (label (12.0f, 0.08f));
+        g.setColour (col::inkDim); g.setFont (label (13.0f, 0.08f));
         g.drawText (onT,  Rectangle<float> (0, c.y - 7, 30, 14), Justification::centredRight, false);
         g.drawText (offT, Rectangle<float> (70, c.y - 7, 30, 14), Justification::centredLeft, false);
-        g.setColour (Colour (0xff0b0b0c)); g.fillEllipse (Rectangle<float> (30, 30).withCentre (c));
-        g.setGradientFill (ColourGradient (Colour (0xffb5b5b8), c.x - 12, c.y - 12, Colour (0xff2a2a2d), c.x + 12, c.y + 12, false));
+        g.setColour (Colour (0xff0b0908)); g.fillEllipse (Rectangle<float> (30, 30).withCentre (c));
+        g.setColour (col::line.withAlpha (0.35f)); g.drawEllipse (Rectangle<float> (30, 30).withCentre (c), 1.0f);
+        g.setGradientFill (ColourGradient (Colour (0xff5d544c), c.x - 12, c.y - 12, Colour (0xff17130f), c.x + 12, c.y + 12, false));
         g.fillEllipse (Rectangle<float> (24, 24).withCentre (c));
         g.setColour (Colour (0xff2a2a2d)); g.fillEllipse (Rectangle<float> (12, 12).withCentre (c));
         const auto tip = polar (c, 15.0f, on ? -32.0f : 32.0f);
-        g.setColour (Colour (0xffd8d8da)); g.drawLine (c.x, c.y, tip.x, tip.y, 5.0f);
-        g.setColour (Colour (0xffe9e9ea)); g.fillEllipse (Rectangle<float> (7.2f, 7.2f).withCentre (tip));
-        g.setColour (col::ink); g.setFont (label (13.0f, 0.12f));
-        g.drawText (name, Rectangle<float> (0, 60, 100, 16), Justification::centred, false);
+        g.setColour (Colour (0xffcfc6bd)); g.drawLine (c.x, c.y, tip.x, tip.y, 5.0f);
+        g.setColour (on ? col::amberHi : Colour (0xffe2dad2)); g.fillEllipse (Rectangle<float> (7.2f, 7.2f).withCentre (tip));
+        g.setFont (label (15.0f, 0.12f));
+        glowText (g, name, Rectangle<float> (0, 60, 100, 17), Justification::centred, col::ink, 0.22f);
     }
 
     void mouseDown (const MouseEvent&) override { attach.setValueAsCompleteGesture (on ? 0.0f : 1.0f); }
@@ -397,21 +435,23 @@ public:
     {
         const Point<float> pivot (125, 176);
         const float R = 118.0f;
-        g.setColour (Colour (0xff060606)); g.fillRoundedRectangle (1, 1, 248, 148, 16);
-        g.setColour (Colour (0xff26262a)); g.drawRoundedRectangle (1, 1, 248, 148, 16, 2);
+        g.setColour (Colour (0xff060504)); g.fillRoundedRectangle (1, 1, 248, 148, 12);
+        g.setColour (col::line.withAlpha (0.35f)); g.drawRoundedRectangle (1, 1, 248, 148, 12, 1.2f);
         const Rectangle<float> face (13, 13, 224, 102);
         {
             Graphics::ScopedSaveState s (g);
             Path clip; clip.addRoundedRectangle (face, 7.0f);
             g.reduceClipRegion (clip);
-            ColourGradient fg (Colour (0xfff9dc9b), 0, face.getY(), Colour (0xffdba253), 0, face.getBottom(), false);
-            fg.addColour (0.6, Colour (0xfff0c072));
-            g.setGradientFill (fg); g.fillRect (face);
-            g.setGradientFill (ColourGradient (Colour (0x8cfff3c9), 125, 100, Colour (0x00fff3c9), 125 + 160, 100, true));
+            g.setGradientFill (ColourGradient (Colour (0xff160d06), 0, face.getY(), Colour (0xff050302), 0, face.getBottom(), false));
             g.fillRect (face);
+            g.setGradientFill (ColourGradient (Colour (0x38ff8a1e), 125, 122, Colour (0x00ff8a1e), 125 + 150, 122, true));
+            g.fillRect (face);
+            g.setColour (Colour (0x10ff8a1e));
+            for (float x = face.getX() + 8; x < face.getRight(); x += 12) g.drawVerticalLine ((int) x, face.getY(), face.getBottom());
+            for (float y = face.getY() + 6; y < face.getBottom(); y += 12) g.drawHorizontalLine ((int) y, face.getX(), face.getRight());
 
             Path arc;  arc.addCentredArc (pivot.x, pivot.y, R, R, 0, degToRad (ang (-20)), degToRad (ang (0)), true);
-            g.setColour (col::faceInk); g.strokePath (arc, PathStrokeType (1.2f));
+            g.setGradientFill (ColourGradient (col::orange, 20, 0, col::yellow, 230, 0, false)); g.strokePath (arc, PathStrokeType (1.6f));
             Path red;  red.addCentredArc (pivot.x, pivot.y, R, R, 0, degToRad (ang (0)), degToRad (ang (3)), true);
             g.setColour (col::faceRed); g.strokePath (red, PathStrokeType (4.0f));
             g.setFont (label (11.5f));
@@ -419,22 +459,26 @@ public:
             {
                 const float a = ang ((float) v);
                 const auto p1 = polar (pivot, R - 9, a), p2 = polar (pivot, R, a), pt = polar (pivot, R + 11, a);
-                g.setColour (v > 0 ? col::faceRed : col::faceInk);
+                g.setColour (v > 0 ? col::faceRed : ramp ((v + 20.0f) / 20.0f));
                 g.drawLine (p1.x, p1.y, p2.x, p2.y, 1.4f);
                 g.drawText (v > 0 ? "+" + String (v) : String (v), Rectangle<float> (24, 12).withCentre (pt), Justification::centred, false);
             }
             g.setFont (label (13.5f, 0.0f, true));
             g.setColour (col::faceInk); g.drawText ("VU", Rectangle<float> (30, 22, 30, 14), Justification::left, false);
             g.setColour (col::faceRed); g.drawText ("VU", Rectangle<float> (190, 22, 30, 14), Justification::right, false);
-            g.setColour (Colour (0xff6b4c1e)); g.setFont (label (9.0f, 0.25f));
+            g.setColour (col::amber.withAlpha (0.45f)); g.setFont (label (9.0f, 0.25f));
             g.drawText ("POTATO KICKER", Rectangle<float> (60, 90, 130, 12), Justification::centred, false);
             const auto tip = polar (pivot, R + 4, ang (jlimit (-20.0f, 3.5f, level)));
-            g.setColour (Colour (0xff18120b)); g.drawLine (pivot.x, pivot.y, tip.x, tip.y, 1.6f);
+            g.setColour (col::amber.withAlpha (0.30f)); g.drawLine (pivot.x, pivot.y, tip.x, tip.y, 5.0f);
+            g.setColour (col::yellow.brighter (0.3f)); g.drawLine (pivot.x, pivot.y, tip.x, tip.y, 1.6f);
         }
-        g.setColour (col::inkDim); g.setFont (label (12.5f, 0.3f));
-        g.drawText ("OUTPUT", Rectangle<float> (60, 126, 130, 16), Justification::centred, false);
+        g.setFont (label (14.5f, 0.3f));
+        glowText (g, "OUTPUT", Rectangle<float> (60, 125, 130, 17), Justification::centred, col::ink, 0.22f);
         drawLed (g, Rectangle<float> (11, 11).withCentre ({ 236.5f, 126.5f }), level > 0.0f);
     }
+
+public:
+    float getLevel() const noexcept { return level; }
 
 private:
     static float ang (float v)
@@ -478,9 +522,17 @@ public:
     void paint (Graphics& g) override
     {
         // bezel
-        g.setGradientFill (ColourGradient (Colour (0xff0c0c0d), 0, 0, Colour (0xff050505), 0, (float) getHeight(), false));
-        g.fillRoundedRectangle (getLocalBounds().toFloat(), 16.0f);
-        g.setColour (Colour (0xff26262a)); g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 16.0f, 2.0f);
+        const auto bb = getLocalBounds().toFloat();
+        g.setGradientFill (ColourGradient (Colour (0xff100d0a), 0, 0, Colour (0xff060504), 0, bb.getHeight(), false));
+        g.fillRoundedRectangle (bb, 10.0f);
+        g.setColour (col::line.withAlpha (0.30f)); g.drawRoundedRectangle (bb.reduced (0.5f), 10.0f, 1.0f);
+        g.setColour (col::line.withAlpha (0.85f));
+        for (auto [x, y, dx, dy] : { std::tuple<float, float, float, float> { 4, 4, 1, 1 }, { bb.getRight() - 4, 4, -1, 1 },
+                                     { 4, bb.getBottom() - 4, 1, -1 }, { bb.getRight() - 4, bb.getBottom() - 4, -1, -1 } })
+        {
+            g.fillRect (dx > 0 ? x : x - 16, dy > 0 ? y : y - 2, 16.0f, 2.0f);
+            g.fillRect (dx > 0 ? x : x - 2, dy > 0 ? y : y - 16, 2.0f, 16.0f);
+        }
 
         // tabs
         const char* names[4] { "AMP", "PITCH", "COMP", "WAVE" };
@@ -489,24 +541,24 @@ public:
             const auto r = tabRect (i);
             if (i == view)
             {
-                g.setColour (col::cream.withAlpha (0.25f)); g.fillRoundedRectangle (r.expanded (3), 5);
-                g.setGradientFill (ColourGradient (Colour (0xfffff6dc), r.getCentreX(), r.getCentreY() - 3, Colour (0xffd9b979), r.getRight(), r.getBottom(), true));
+                g.setColour (col::amber.withAlpha (0.28f)); g.fillRoundedRectangle (r.expanded (3), 5);
+                g.setGradientFill (ColourGradient (col::yellow.brighter (0.2f), 0, r.getY(), col::orange, 0, r.getBottom(), false));
                 g.fillRoundedRectangle (r, 3);
-                g.setColour (Colour (0xff2a1c06));
+                g.setColour (Colour (0xff1a0b02));
             }
             else
             {
-                g.setGradientFill (ColourGradient (Colour (0xff3a3a3e), 0, r.getY(), Colour (0xff1d1d20), 0, r.getBottom(), false));
+                g.setGradientFill (ColourGradient (Colour (0xff1d1713), 0, r.getY(), Colour (0xff0e0b09), 0, r.getBottom(), false));
                 g.fillRoundedRectangle (r, 3);
-                g.setColour (Colours::black); g.drawRoundedRectangle (r, 3, 1);
-                g.setColour (Colour (0xff9a968e));
+                g.setColour (col::line.withAlpha (0.4f)); g.drawRoundedRectangle (r.reduced (0.5f), 3, 1);
+                g.setColour (Colour (0xffc0824e));
             }
-            g.setFont (label (13.0f, 0.14f));
+            g.setFont (label (14.5f, 0.12f));
             g.drawText (names[i], r, Justification::centred, false);
         }
-        g.setColour (col::amber); g.setFont (mono (13.0f));
-        g.drawText (pk::noteName (last.tune) + " · " + String (last.tune, 1) + " Hz · " + pk::waveNames[last.wave],
-                    Rectangle<float> (300, 12, 242, 22), Justification::centredRight, false);
+        g.setFont (mono (14.0f));
+        glowText (g, pk::noteName (last.tune) + " · " + String (last.tune, 1) + " Hz · " + pk::waveNames[last.wave],
+                  Rectangle<float> (300, 12, 242, 22), Justification::centredRight, col::yellow, 0.22f);
 
         // screen
         {
@@ -515,11 +567,11 @@ public:
             g.reduceClipRegion (Rectangle<int> (0, 0, CW, CH));
             drawScreen (g);
         }
-        g.setColour (Colours::black); g.drawRoundedRectangle (scr.toFloat(), 7.0f, 1.0f);
+        g.setColour (col::line.withAlpha (0.25f)); g.drawRoundedRectangle (scr.toFloat(), 7.0f, 1.0f);
 
         // footer
         const char* foot[4] { "Drag ATTACK, DECAY/SUSTAIN and RELEASE points", "Drag START, PITCH TIME and TUNE points", "Drag THRESHOLD/MAKEUP and RATIO points", "Live output, last 2.4 seconds" };
-        g.setColour (Colour (0xff7d6a4c)); g.setFont (mono (11.5f));
+        g.setColour (Colour (0xffc48a4c)); g.setFont (mono (12.5f));
         g.drawText (foot[view], Rectangle<float> (22, 312, 400, 16), Justification::centredLeft, false);
         const String right = view == 0 ? (last.oneShot() ? "one-shot kick" : "gated bass")
                            : view == 1 ? "+" + String (roundToInt (last.pamt)) + " st"
@@ -748,21 +800,44 @@ private:
             for (int d = -48; d <= 12; d += 12) { hline (cyd ((float) d)); text (String (d), PL - 44.0f, cyd ((float) d), Justification::centredRight); }
         }
 
-        // waveform
+        // waveform: deep orange at the centre line rising to bright yellow at the peaks, with a bloom
         if (view < 2 && ! preview.empty())
         {
             const int N = (int) preview.size();
-            const float alpha = view == 0 ? 0.85f : 0.22f;
+            const bool mainView = view == 0;
+            const float cy = ay (0.0f);
+            float peak = 0.05f;   // scale the gradient to this sound's own peak so every waveform spans orange -> yellow
+            for (auto v : preview) peak = jmax (peak, std::abs (v));
+            ColourGradient upG (Colour (0xffff5a00), 0, cy, Colour (0xfffff3b0), 0, ay (peak), false);
+            upG.addColour (0.30, Colour (0xffff9a1a));
+            upG.addColour (0.65, Colour (0xffffd23f));
+            ColourGradient loG (upG); loG.point2 = { 0, ay (-peak) };
+            Path upper, lower;
             for (int c = 0; c < GW; ++c)
             {
                 const int i0 = (int) ((float) c / GW * N), i1 = jmax (i0 + 1, (int) ((float) (c + 1) / GW * N));
                 float mn = 1.0f, mx = -1.0f;
                 for (int i = i0; i < i1 && i < N; ++i) { mn = jmin (mn, preview[(size_t) i]); mx = jmax (mx, preview[(size_t) i]); }
                 if (mx < mn) continue;
-                const float top = ay (mx), bot = ay (mn) + 0.6f;
-                if (view == 0) { g.setColour (Colour (0xffffaa3c).withAlpha (0.12f)); g.fillRect ((float) (PL + c) - 1.0f, top - 1.5f, 3.0f, bot - top + 3.0f); }
-                g.setColour (col::amber.withAlpha (alpha));
-                g.drawVerticalLine (PL + c, top, bot);
+                const float top = ay (mx), bot = ay (mn) + 0.6f, x = (float) (PL + c);
+                if (mainView)
+                {
+                    g.setColour (Colour (0xffff7a00).withAlpha (0.20f)); g.fillRect (x - 2.5f, top - 4.0f, 6.0f, bot - top + 8.0f);
+                    // each column glows from deep orange at the centre line to yellow at its own tip
+                    if (cy - top > 0.5f) { auto gu = upG; gu.point2 = { 0, top }; g.setGradientFill (gu); g.fillRect (x, top, 1.0f, cy - top); }
+                    if (bot - cy > 0.5f) { auto gl = loG; gl.point2 = { 0, bot }; g.setGradientFill (gl); g.fillRect (x, cy, 1.0f, bot - cy); }
+                    if (upper.isEmpty()) { upper.startNewSubPath (x, top); lower.startNewSubPath (x, bot); }
+                    else                 { upper.lineTo (x, top);          lower.lineTo (x, bot); }
+                }
+                else
+                {
+                    g.setColour (ramp (jmax (mx, -mn)).withAlpha (0.45f)); g.drawVerticalLine (PL + c, top, bot);
+                }
+            }
+            if (mainView)
+            {
+                g.setColour (col::yellow.withAlpha (0.35f)); g.strokePath (upper, PathStrokeType (3.0f)); g.strokePath (lower, PathStrokeType (3.0f));
+                g.setColour (Colour (0xfffff2c4));           g.strokePath (upper, PathStrokeType (1.1f)); g.strokePath (lower, PathStrokeType (1.1f));
             }
         }
 
@@ -774,7 +849,8 @@ private:
                 const float y = ay (envDisp (xt ((float) (PL + c))));
                 if (c == 0) env.startNewSubPath ((float) PL, y); else env.lineTo ((float) (PL + c), y);
             }
-            g.setColour (Colour (0xfffff1cf)); g.strokePath (env, PathStrokeType (1.6f));
+            g.setColour (col::yellow.withAlpha (0.25f)); g.strokePath (env, PathStrokeType (5.0f));
+            g.setColour (Colour (0xfffff3d0)); g.strokePath (env, PathStrokeType (1.8f));
             g.setFont (mono (10.5f));
             if (! oneShot)
             {
@@ -806,8 +882,9 @@ private:
                 const float y = fy (last.pitchAt (xt ((float) (PL + c))));
                 if (c == 0) curve.startNewSubPath ((float) PL, y); else curve.lineTo ((float) (PL + c), y);
             }
-            g.setColour (col::amberHi.withAlpha (0.25f)); g.strokePath (curve, PathStrokeType (5.0f));
-            g.setColour (col::amberHi); g.strokePath (curve, PathStrokeType (2.0f));
+            g.setColour (col::orange.withAlpha (0.3f)); g.strokePath (curve, PathStrokeType (6.0f));
+            g.setGradientFill (ColourGradient (col::yellow, (float) PL, 0, col::orange, (float) (PL + GW), 0, false));
+            g.strokePath (curve, PathStrokeType (2.2f));
             g.setColour (Colour (0xffff5a46).withAlpha (0.85f)); g.setFont (mono (10.5f));
             g.drawText (pk::noteName (last.tune), Rectangle<float> ((float) PL + 4, yt - 16, 60, 12), Justification::centredLeft, false);
         }
@@ -825,8 +902,9 @@ private:
                 if (d == -48.0f) curve.startNewSubPath (pnt); else curve.lineTo (pnt);
             }
             const float a = last.comp ? 1.0f : 0.35f;
-            g.setColour (col::amberHi.withAlpha (0.25f * a)); g.strokePath (curve, PathStrokeType (5.0f));
-            g.setColour (col::amberHi.withAlpha (a)); g.strokePath (curve, PathStrokeType (2.0f));
+            g.setColour (col::orange.withAlpha (0.3f * a)); g.strokePath (curve, PathStrokeType (6.0f));
+            auto cg = ColourGradient (col::orange.withAlpha (a), (float) PL, 0, col::yellow.withAlpha (a), (float) (PL + GW), 0, false);
+            g.setGradientFill (cg); g.strokePath (curve, PathStrokeType (2.2f));
             const float h = jmin ((float) GH, grShow / 24.0f * GH);
             g.setColour (col::led.withAlpha (0.15f)); g.fillRect ((float) (PL + GW - 16), (float) PT, 10.0f, (float) GH);
             g.setColour (Colour (0xffff3b2c)); g.fillRect ((float) (PL + GW - 16), (float) PT, 10.0f, h);
@@ -897,9 +975,10 @@ private:
         const float kHoldDecay = envCoef (0.10f);
         const float cy = (float) h * 0.5f, half = (float) h * 0.47f;
 
-        static const Colour bands[6] { Colour (0xff4a2fd0), Colour (0xff2f8dff), Colour (0xffc040d8),
-                                       Colour (0xffff5c78), Colour (0xffffa63e), Colour (0xffffe8c2) };
-        static const Colour kickCol (0xff230a36), edgeCol (0xffffb46e);
+        // ember red in the sub, through orange and amber, to bright and pale yellow in the highs
+        static const Colour bands[6] { Colour (0xffd02800), Colour (0xffff5a00), Colour (0xffff8a12),
+                                       Colour (0xffffb028), Colour (0xffffd84a), Colour (0xfffff4b0) };
+        static const Colour kickCol (0xff7a1500), edgeCol (0xffffe066);
         static const float gain[6] { 1.0f, 1.0f, 1.3f, 1.6f, 2.2f, 3.0f };
 
         for (int i = 0; i < n; ++i)
@@ -940,7 +1019,7 @@ private:
 
             const float rms = std::sqrt (ms / (float) samplesPerCol);
             auto heightOf = [&] (float amp) { return half * std::pow (jlimit (0.0f, 1.0f, amp), 0.75f); };
-            const float body = jmax (1.0f, heightOf (rms * 1.6f));
+            const float body = jmax (1.0f, heightOf (rms * 2.2f));
             const float halo = jmax (body, heightOf (wPeak));
 
             ColourGradient grad;
@@ -950,10 +1029,10 @@ private:
             for (int k = 5; k >= 0; --k)
             {
                 const float sh = waveShare[(size_t) k];
-                auto col = bands[k];
+                auto col = bands[k].brighter (0.2f);
                 if (k <= 1) col = col.interpolatedWith (kickCol, jlimit (0.0f, 0.75f, waveKickSm * 0.75f));
                 const float p = jlimit (0.0f, 1.0f, acc + sh * 0.5f);
-                if (first) { grad.addColour (0.0, col.brighter (0.25f)); first = false; }
+                if (first) { grad.addColour (0.0, col.brighter (0.5f)); first = false; }
                 if (p > 0.0f && p < 1.0f) grad.addColour ((double) p, col);
                 acc += sh;
             }
@@ -973,7 +1052,7 @@ private:
                 gi.fillRect (xc, side < 0 ? cy - body : cy, 1.0f, body);
                 if (halo > body + 0.5f)
                 {
-                    gi.setGradientFill (ColourGradient (edgeCol.withAlpha (0.38f), xc, cy + side * body, edgeCol.withAlpha (0.0f), xc, cy + side * halo, false));
+                    gi.setGradientFill (ColourGradient (edgeCol.withAlpha (0.6f), xc, cy + side * body, edgeCol.withAlpha (0.0f), xc, cy + side * halo, false));
                     gi.fillRect (xc, side < 0 ? cy - halo : cy + body, 1.0f, halo - body);
                 }
             }
@@ -986,7 +1065,7 @@ private:
 
     void drawWave (Graphics& g)
     {
-        g.setGradientFill (ColourGradient (Colour (0xff0b0d14), 0, 0, Colour (0xff030407), 0, (float) CH, false));
+        g.setGradientFill (ColourGradient (Colour (0xff120c07), 0, 0, Colour (0xff040302), 0, (float) CH, false));
         g.fillRect (0, 0, CW, CH);
 
         // mirrored dB guides
@@ -1012,21 +1091,30 @@ private:
             g.drawText (s == 0 ? String ("now") : "-" + String (s) + "s", Rectangle<float> (x - 40, CH - 16.0f, 40, 14), Justification::centredRight, false);
         }
 
-        if (waveImg.isValid()) g.drawImageAt (waveImg, PL, PT);
+        if (waveImg.isValid())
+        {
+            g.drawImageAt (waveImg, PL, PT);
+            g.setOpacity (0.35f);                       // soft bloom around the bright waveform
+            g.drawImageAt (waveImg, PL - 1, PT);
+            g.drawImageAt (waveImg, PL + 1, PT);
+            g.drawImageAt (waveImg, PL, PT - 1);
+            g.drawImageAt (waveImg, PL, PT + 1);
+            g.setOpacity (1.0f);
+        }
 
         // glowing horizon: white-hot core fading through amber to blue at the edges
-        ColourGradient hz (Colour (0xff2e8bff).withAlpha (0.0f), (float) PL, cy, Colour (0xff2e8bff).withAlpha (0.0f), (float) (PL + GW), cy, false);
-        hz.addColour (0.20, Colour (0xffffa63e).withAlpha (0.22f));
-        hz.addColour (0.45, Colour (0xffffe8c2).withAlpha (0.38f));
-        hz.addColour (0.75, Colour (0xff8fb8ff).withAlpha (0.22f));
+        ColourGradient hz (col::orange.withAlpha (0.0f), (float) PL, cy, col::yellow.withAlpha (0.0f), (float) (PL + GW), cy, false);
+        hz.addColour (0.20, col::orange.withAlpha (0.25f));
+        hz.addColour (0.50, Colour (0xfffff0b8).withAlpha (0.45f));
+        hz.addColour (0.80, col::yellow.withAlpha (0.28f));
         g.setGradientFill (hz); g.fillRect ((float) PL, cy - 3.0f, (float) GW, 7.0f);
         hz.multiplyOpacity (1.8f);
         g.setGradientFill (hz); g.fillRect ((float) PL, cy, (float) GW, 1.0f);
 
         // "now" line at the right edge
         const float x = (float) (PL + GW) - 1.0f;
-        g.setColour (Colour (0xff3ba7ff).withAlpha (0.25f)); g.fillRect (x - 3.0f, (float) PT, 6.0f, (float) GH);
-        g.setColour (Colour (0xff3ba7ff).brighter (0.6f));    g.fillRect (x, (float) PT, 1.0f, (float) GH);
+        g.setColour (col::yellow.withAlpha (0.25f)); g.fillRect (x - 3.0f, (float) PT, 6.0f, (float) GH);
+        g.setColour (col::yellow.brighter (0.4f));    g.fillRect (x, (float) PT, 1.0f, (float) GH);
     }
 
     Image waveImg;
@@ -1061,20 +1149,25 @@ public:
     {
         auto r = getLocalBounds().toFloat().reduced (1.0f);
         if (down) r.translate (0, 1);
-        g.setColour (Colours::black.withAlpha (0.6f)); g.fillRoundedRectangle (r.translated (0, 2), 3);
+        Colour ink;
         if (getToggleState())
         {
-            g.setColour (col::cream.withAlpha (0.25f)); g.fillRoundedRectangle (r.expanded (3), 5);
-            g.setGradientFill (ColourGradient (Colour (0xfffff8e4), r.getCentreX(), r.getCentreY() - 3, Colour (0xffd7b06a), r.getRight(), r.getBottom(), true));
+            g.setColour (col::amber.withAlpha (0.28f)); g.fillRoundedRectangle (r.expanded (3), 5);
+            g.setGradientFill (ColourGradient (col::yellow.brighter (0.2f), 0, r.getY(), col::orange, 0, r.getBottom(), false));
+            g.fillRoundedRectangle (r, 3);
+            ink = Colour (0xff1a0b02);
         }
         else
-            g.setGradientFill (ColourGradient (Colour (over ? 0xff86868b : 0xff77777c), 0, r.getY(), Colour (0xff3b3b3f), 0, r.getBottom(), false));
-        g.fillRoundedRectangle (r, 3);
-        g.setColour (Colours::black); g.drawRoundedRectangle (r, 3, 1);
-        g.setColour (Colour (0xff151515));
+        {
+            g.setGradientFill (ColourGradient (Colour (over ? 0xff261d16 : 0xff1d1713), 0, r.getY(), Colour (0xff0e0b09), 0, r.getBottom(), false));
+            g.fillRoundedRectangle (r, 3);
+            g.setColour (col::line.withAlpha (over ? 0.75f : 0.45f)); g.drawRoundedRectangle (r.reduced (0.5f), 3, 1);
+            ink = col::ink;
+        }
+        g.setColour (ink);
         if (kind == text)
         {
-            g.setFont (label (13.0f, 0.08f, true));
+            g.setFont (label (14.0f, 0.06f, true));
             g.drawText (getButtonText(), r, Justification::centred, false);
         }
         else
@@ -1103,13 +1196,13 @@ public:
         if (over) { g.setColour (Colours::white.withAlpha (0.03f)); g.fillRoundedRectangle (r, 3); }
         if (red)
         {
-            g.setFont (mono (18.0f));
-            glowText (g, txt, r, Justification::centred, Colour (0xffff4232), 0.25f);
+            g.setFont (mono (19.0f));
+            glowTextRamp (g, txt, r.reduced (14.0f, 0.0f), Justification::centred, 0.35f);
         }
         else
         {
-            g.setFont (mono (17.0f));
-            glowText (g, txt, r.withTrimmedLeft (12).withTrimmedRight (10), Justification::centredLeft, col::amber, 0.18f);
+            g.setFont (mono (18.0f));
+            glowText (g, txt, r.withTrimmedLeft (12).withTrimmedRight (10), Justification::centredLeft, col::yellow, 0.25f);
         }
     }
 private:
@@ -1137,8 +1230,9 @@ public:
             {
                 Path p; p.addRoundedRectangle (r.x, r.y, r.w, r.h, 1.2f); p.applyTransform (xf);
                 const bool lit = on.containsChar (r.k);
-                if (lit) { g.setColour (Colour (0xffff3524).withAlpha (0.25f)); g.strokePath (p, PathStrokeType (3.0f)); }
-                g.setColour (lit ? Colour (0xffff3524) : Colour (0xff2a0805));
+                const Colour segCol = ramp (1.0f - (r.y + r.h * 0.5f) / 38.0f);   // yellow at the top, orange at the bottom
+                if (lit) { g.setColour (segCol.withAlpha (0.35f)); g.strokePath (p, PathStrokeType (3.0f)); }
+                g.setColour (lit ? segCol : Colour (0xff26120a));
                 g.fillPath (p);
             }
         }
@@ -1163,25 +1257,141 @@ public:
     void setLit (bool b) { if (b != lit) { lit = b; repaint(); } }
     void paint (Graphics& g) override
     {
-        const auto r = getLocalBounds().toFloat().reduced (1.0f);
+        // glowing orange ring button, like the round controls in the HUD reference
+        const auto r = getLocalBounds().toFloat().reduced (2.0f);
         const auto c = r.getCentre();
         g.setColour (Colours::black.withAlpha (0.6f)); g.fillEllipse (r.translated (0, 3));
-        ColourGradient ring (Colour (0xff3d3d42), c.x, c.y - r.getHeight() * 0.5f, Colour (0xff0f0f10), c.x, c.y + r.getHeight() * 0.5f, false);
-        g.setGradientFill (ring); g.fillEllipse (r);
-        g.setColour (Colour (0xff0b0b0c)); g.fillEllipse (r.reduced (5));
-        g.setColour (Colour (0xff2a2a2d)); g.fillEllipse (r.reduced (7));
-        const auto lens = r.reduced (14);
-        g.setGradientFill (ColourGradient (col::go.withAlpha (lit ? 0.8f : 0.5f), c.x, c.y, col::go.withAlpha (0.0f), c.x + lens.getWidth(), c.y, true));
-        g.fillEllipse (lens.expanded (lit ? 12.0f : 6.0f));
-        ColourGradient gl (lit ? Colour (0xfff2fff5) : Colour (0xffc9ffd9), c.x - lens.getWidth() * 0.08f, c.y - lens.getHeight() * 0.15f,
-                           lit ? Colour (0xff1d9a4b) : Colour (0xff0f6a30), c.x + lens.getWidth() * 0.5f, c.y, true);
-        gl.addColour (0.45, lit ? Colour (0xff7dffa8) : col::go);
-        g.setGradientFill (gl); g.fillEllipse (lens);
+        g.setColour (Colour (0xff0b0908)); g.fillEllipse (r);
+        g.setColour (col::line.withAlpha (0.35f)); g.drawEllipse (r.reduced (0.5f), 1.0f);
+        const auto ring = r.reduced (r.getWidth() * 0.16f);
+        strokeRampRing (g, c, ring.getWidth() * 0.5f, lit ? 11.0f : 8.0f, lit ? 0.35f : 0.16f);
+        strokeRampRing (g, c, ring.getWidth() * 0.5f, 3.4f, lit ? 1.0f : 0.85f);
+        g.setColour (Colour (0xfffff0c8).withAlpha (lit ? 0.95f : 0.45f)); g.drawEllipse (ring, 1.0f);
+        g.setColour (Colour (0xff120c08)); g.fillEllipse (ring.reduced (4.0f));
+        if (lit)
+        {
+            g.setGradientFill (ColourGradient (col::amber.withAlpha (0.45f), c.x, c.y, col::amber.withAlpha (0.0f), c.x + ring.getWidth() * 0.5f, c.y, true));
+            g.fillEllipse (ring.reduced (4.0f));
+        }
+        g.setGradientFill (ColourGradient (col::orange, c.x - ring.getWidth() * 0.21f, 0, col::yellow, c.x + ring.getWidth() * 0.21f, 0, false));
+        g.fillRoundedRectangle (Rectangle<float> (ring.getWidth() * 0.42f, 3.2f).withCentre (c), 1.6f);
     }
     void mouseDown (const MouseEvent&) override { if (onPress) onPress (true); }
     void mouseUp (const MouseEvent&) override   { if (onPress) onPress (false); }
 private:
     bool lit = false;
+};
+
+//==============================================================================
+// Row of console LEDs across the preset strip that light up with the output level, orange to yellow
+class LevelLights : public Component
+{
+public:
+    void setLevel (float vuDb) { const int n = jlimit (0, count, roundToInt (jmap (vuDb, -24.0f, 3.0f, 0.0f, (float) count))); if (n != lit) { lit = n; repaint(); } }
+    void paint (Graphics& g) override
+    {
+        const float step = (float) getWidth() / count, cy = getHeight() * 0.5f;
+        for (int i = 0; i < count; ++i)
+        {
+            const auto r = Rectangle<float> (step * 0.62f, 4.0f).withCentre ({ step * (i + 0.5f), cy });
+            const Colour c = ramp ((float) i / (count - 1));
+            if (i < lit)
+            {
+                g.setColour (c.withAlpha (0.3f)); g.fillRoundedRectangle (r.expanded (2.5f, 2.5f), 3.0f);
+                g.setColour (c.brighter (0.2f));  g.fillRoundedRectangle (r, 2.0f);
+            }
+            else { g.setColour (c.withAlpha (0.13f)); g.fillRoundedRectangle (r, 2.0f); }
+        }
+    }
+private:
+    static constexpr int count = 48;
+    int lit = 0;
+};
+
+//==============================================================================
+// Potato emblem: clean orange line art with a calm face. The eyes glow brighter while notes play.
+class PotatoBadge : public Component
+{
+public:
+    void setActivity (float a)
+    {
+        a = jlimit (0.0f, 1.0f, a);
+        if (std::abs (a - act) > 0.01f) { act = a; repaint(); }
+    }
+
+    void paint (Graphics& g) override
+    {
+        const auto b = getLocalBounds().toFloat();
+        const Point<float> c (b.getCentreX(), b.getCentreY() - 6.0f);
+        const float R = jmin (b.getWidth(), b.getHeight()) * 0.37f;
+        const Path spud = potatoPath (c, R);
+
+        // backlight
+        g.setGradientFill (ColourGradient (col::amber.withAlpha (0.16f + 0.14f * act), c.x, c.y, col::amber.withAlpha (0.0f), c.x + R * 1.7f, c.y, true));
+        g.fillEllipse (Rectangle<float> (R * 3.4f, R * 2.7f).withCentre (c));
+
+        // body and glowing outline
+        g.setGradientFill (ColourGradient (Colour (0xff3a200c), c.x - R * 0.35f, c.y - R * 0.45f, Colour (0xff0d0704), c.x + R * 0.95f, c.y + R * 0.8f, true));
+        g.fillPath (spud);
+        const auto sb = spud.getBounds();
+        auto rampFill = [&] (float a) { return ColourGradient (col::orange.withAlpha (a), sb.getX(), sb.getBottom(), col::yellow.withAlpha (a), sb.getRight(), sb.getY(), false); };
+        g.setGradientFill (rampFill (0.16f)); g.strokePath (spud, PathStrokeType (9.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        g.setGradientFill (rampFill (0.40f)); g.strokePath (spud, PathStrokeType (4.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        g.setGradientFill (rampFill (1.0f));  g.strokePath (spud, PathStrokeType (1.7f, PathStrokeType::curved, PathStrokeType::rounded));
+
+        // skin highlight and the little potato "eyes" (sprout spots)
+        Path hl; hl.addCentredArc (c.x - R * 0.1f, c.y + R * 0.02f, R * 1.0f, R * 0.66f, degToRad (-14.0f), degToRad (-78.0f), degToRad (-22.0f), true);
+        g.setColour (col::amberHi.withAlpha (0.35f)); g.strokePath (hl, PathStrokeType (1.2f, PathStrokeType::curved, PathStrokeType::rounded));
+        g.setColour (col::amber.withAlpha (0.5f));
+        for (auto p : { Point<float> (-0.86f, 0.34f), Point<float> (0.88f, -0.40f), Point<float> (0.66f, 0.52f), Point<float> (-0.48f, 0.62f), Point<float> (-0.10f, -0.70f) })
+            g.drawEllipse (Rectangle<float> (3.4f, 2.2f).withCentre (c + p * R), 1.0f);
+
+        // face: calm round eyes with glowing pupils, small smile
+        for (int i = 0; i < 2; ++i)
+        {
+            const Point<float> e = c + Point<float> (i == 0 ? -0.34f : 0.30f, i == 0 ? -0.16f : -0.19f) * R;
+            const auto socket = Rectangle<float> (R * 0.30f, R * 0.36f).withCentre (e);
+            g.setColour (Colour (0xff080402)); g.fillEllipse (socket);
+            g.setColour (col::amber.withAlpha (0.85f)); g.drawEllipse (socket, 1.3f);
+            const float pr = R * (0.075f + 0.02f * act);
+            const Point<float> pc = e + Point<float> (R * 0.025f, R * 0.03f);
+            g.setColour (col::amber.withAlpha (0.25f + 0.4f * act)); g.fillEllipse (Rectangle<float> (pr * 4.0f, pr * 4.0f).withCentre (pc));
+            g.setGradientFill (ColourGradient (Colour (0xfffff3c8), pc.x - pr * 0.3f, pc.y - pr * 0.3f, col::yellow, pc.x + pr, pc.y + pr, true));
+            g.fillEllipse (Rectangle<float> (pr * 2.0f, pr * 2.0f).withCentre (pc));
+            g.setColour (Colours::white.withAlpha (0.85f)); g.fillEllipse (Rectangle<float> (pr * 0.6f, pr * 0.6f).withCentre (pc - Point<float> (pr * 0.35f, pr * 0.4f)));
+        }
+        Path mouth;
+        mouth.startNewSubPath (c.x - R * 0.22f, c.y + R * 0.30f);
+        mouth.quadraticTo (c.x - R * 0.02f, c.y + R * 0.46f, c.x + R * 0.22f, c.y + R * 0.27f);
+        g.setColour (col::amber.withAlpha (0.3f)); g.strokePath (mouth, PathStrokeType (4.5f, PathStrokeType::curved, PathStrokeType::rounded));
+        g.setColour (col::yellow);                 g.strokePath (mouth, PathStrokeType (1.9f, PathStrokeType::curved, PathStrokeType::rounded));
+
+        // HUD caption
+        g.setColour (Colour (0xffb98c62)); g.setFont (mono (11.5f));
+        g.drawText ("SPUD-01", Rectangle<float> (0, b.getBottom() - 14, b.getWidth(), 12), Justification::centred, false);
+    }
+
+private:
+    static Path potatoPath (Point<float> c, float R)
+    {
+        const float radii[16] { 1.02f, 0.97f, 0.90f, 0.93f, 0.99f, 0.95f, 0.91f, 0.98f, 1.06f, 1.03f, 0.94f, 0.90f, 0.96f, 1.04f, 1.00f, 1.05f };
+        const float tilt = degToRad (-10.0f), ct = std::cos (tilt), st = std::sin (tilt);
+        Point<float> pts[16];
+        for (int i = 0; i < 16; ++i)
+        {
+            const float a = degToRad (i * 22.5f);
+            const float x = std::cos (a) * R * 1.22f * radii[i], y = std::sin (a) * R * 1.0f * radii[i];
+            pts[i] = c + Point<float> (x * ct - y * st, x * st + y * ct);
+        }
+        Path p;
+        auto mid = [&] (int i, int j) { return (pts[i] + pts[j]) * 0.5f; };
+        p.startNewSubPath (mid (15, 0));
+        for (int i = 0; i < 16; ++i) p.quadraticTo (pts[i], mid (i, (i + 1) % 16));
+        p.closeSubPath();
+        return p;
+    }
+
+    float act = 0.0f;
 };
 
 //==============================================================================
@@ -1205,15 +1415,15 @@ public:
         const auto b = getLocalBounds().toFloat();
         g.setColour (Colours::black.withAlpha (0.5f)); g.fillRoundedRectangle (b.translated (0, 12), 12);
         g.setColour (Colour (0xf7080809)); g.fillRoundedRectangle (b, 12);
-        g.setColour (Colour (0xff34343a)); g.drawRoundedRectangle (b.reduced (0.5f), 12, 1);
-        g.setColour (Colour (0xff26262a)); g.drawVerticalLine (210, 0, b.getBottom());
+        g.setColour (col::line.withAlpha (0.45f)); g.drawRoundedRectangle (b.reduced (0.5f), 12, 1);
+        g.setColour (col::line.withAlpha (0.2f)); g.drawVerticalLine (210, 0, b.getBottom());
 
         for (int i = 0; i < pk::numGenres; ++i)
         {
             const auto r = genreRect (i);
-            if (i == genre) { g.setColour (Colour (0xff140807)); g.fillRect (r); }
+            if (i == genre) { g.setColour (Colour (0xff1e1006)); g.fillRect (r); }
             g.setFont (label (16.0f, 0.12f));
-            if (i == genre) glowText (g, String (pk::genreNames[i]).toUpperCase(), r.withTrimmedLeft (22), Justification::centredLeft, Colour (0xffff4232), 0.2f);
+            if (i == genre) glowText (g, String (pk::genreNames[i]).toUpperCase(), r.withTrimmedLeft (22), Justification::centredLeft, col::amber, 0.2f);
             else { g.setColour (col::inkDim); g.drawText (String (pk::genreNames[i]).toUpperCase(), r.withTrimmedLeft (22), Justification::centredLeft, false); }
             g.setColour (col::inkDim.withAlpha (0.6f)); g.setFont (mono (11.5f));
             g.drawText ("10", r.withTrimmedRight (20), Justification::centredRight, false);
@@ -1233,8 +1443,8 @@ public:
             const auto r = presetRect (i);
             const bool on = idx == current, over = idx == hoverIdx;
             g.setColour (on ? Colour (0xff1b150c) : over ? Colour (0xff1a1a1d) : Colour (0xff121214)); g.fillRoundedRectangle (r, 6);
-            g.setColour (on ? col::amber : Colour (0xff26262a)); g.drawRoundedRectangle (r.reduced (0.5f), 6, 1);
-            g.setColour (Colour (0xffff4232)); g.setFont (mono (15.0f));
+            g.setColour (on ? col::amber : col::line.withAlpha (0.2f)); g.drawRoundedRectangle (r.reduced (0.5f), 6, 1);
+            g.setColour (col::amber); g.setFont (mono (15.0f));
             g.drawText (String (i + 1).paddedLeft ('0', 2), Rectangle<float> (r.getX() + 14, r.getY(), 30, r.getHeight()), Justification::centredLeft, false);
             g.setColour (col::ink); g.setFont (label (16.5f, 0.05f));
             g.drawText (p.name, Rectangle<float> (r.getX() + 50, r.getY() + 8, r.getWidth() - 56, 20), Justification::centredLeft, false);
@@ -1299,19 +1509,19 @@ public:
         waveSwitch->setBounds (15, 64, 152, 140);
 
         const Colour white (0xffd9dde2);   // white light-pipe for the non-envelope knobs
-        knob (pk::id::tune,   "TUNE",       100, 225, 140)->setAccent (white, Colours::white);
-        knob (pk::id::pamt,   "PITCH AMT",   92,  95, 292)->setAccent (white, Colours::white);
-        knob (pk::id::pdec,   "PITCH TIME",  92, 225, 292)->setAccent (white, Colours::white);
-        knob (pk::id::click,  "CLICK",       84,  95, 445)->setAccent (white, Colours::white);
-        knob (pk::id::drive,  "DRIVE",       84, 225, 445)->setAccent (white, Colours::white);
-        knob (pk::id::thr,    "THRESHOLD",   92, 975, 300)->setAccent (white, Colours::white);
-        knob (pk::id::ratio,  "RATIO",       92, 1105, 300)->setAccent (white, Colours::white);
-        knob (pk::id::makeup, "MAKEUP",      80, 975, 432)->setAccent (white, Colours::white);
-        knob (pk::id::vol,    "VOLUME",      88, 1040, 550)->setAccent (white, Colours::white);
-        knob (pk::id::atk,    "ATTACK",     100, 390, 492)->setAccent (Colour (0xff5a1aa8), Colour (0xffb98cff));   // dark purple
-        knob (pk::id::dec,    "DECAY",      100, 530, 492)->setAccent (Colour (0xff1550d8), Colour (0xff8cc2ff));   // blue
-        knob (pk::id::sus,    "SUSTAIN",    100, 670, 492)->setAccent (Colour (0xffd85a08), Colour (0xffffb46a));   // orange
-        knob (pk::id::rel,    "RELEASE",    100, 810, 492)->setAccent (Colour (0xffd8a800), Colour (0xfffff08a));   // yellow
+        knob (pk::id::tune,   "TUNE",       100, 225, 140);
+        knob (pk::id::pamt,   "PITCH AMT",   92,  95, 292);
+        knob (pk::id::pdec,   "PITCH TIME",  92, 225, 292);
+        knob (pk::id::click,  "CLICK",       84,  95, 445);
+        knob (pk::id::drive,  "DRIVE",       84, 225, 445);
+        knob (pk::id::thr,    "THRESHOLD",   92, 975, 300);
+        knob (pk::id::ratio,  "RATIO",       92, 1105, 300);
+        knob (pk::id::makeup, "MAKEUP",      80, 975, 432);
+        knob (pk::id::vol,    "VOLUME",      88, 1040, 550);
+        knob (pk::id::atk,    "ATTACK",     100, 390, 492);   // dark purple
+        knob (pk::id::dec,    "DECAY",      100, 530, 492);   // blue
+        knob (pk::id::sus,    "SUSTAIN",    100, 670, 492);   // orange
+        knob (pk::id::rel,    "RELEASE",    100, 810, 492);   // yellow
 
         auto toggle = [&] (const char* id, const char* title, const char* on, const char* off, int x, int y)
         {
@@ -1360,6 +1570,13 @@ public:
             else      proc.keyboardState.noteOff (1, 36, 0.0f);
         };
 
+        addAndMakeVisible (levelLights);
+        levelLights.setBounds (40, 625, 1000, 12);
+        levelLights.setInterceptsMouseClicks (false, false);
+        addAndMakeVisible (badge);
+        badge.setBounds (1058, 620, 126, 134);
+        badge.setInterceptsMouseClicks (false, false);
+
         addChildComponent (browser);
         browser.setBounds (150, 46, 900, 520);
         browser.onPick = [this] (int i) { pick (i, true); };
@@ -1376,45 +1593,48 @@ public:
         if (proc.noteOnCounter.load() != lastCounter) { lastCounter = proc.noteOnCounter.load(); lastNoteSeen = Time::getMillisecondCounterHiRes(); }
         const bool active = proc.heldNotes.load() > 0 || Time::getMillisecondCounterHiRes() - lastNoteSeen < 90.0;
         midiLed.setOn (active);
+        badgeLevel = active ? 1.0f : badgeLevel * 0.88f;
+        badge.setActivity (badgeLevel);
         trigger.setLit (active);
         vu.setLevel (proc.meterRms.load());
+        levelLights.setLevel (vu.getLevel());
         display.tick();
     }
 
     void paint (Graphics& g) override
     {
         g.fillAll (col::page);
-        drawPlate (g, { 0, 0, 1200, 612 });
-        drawPlate (g, { 0, 620, 1200, 140 });
-        for (auto pnt : { Point<float> (18, 18), Point<float> (1182, 18), Point<float> (18, 594), Point<float> (1182, 594),
-                          Point<float> (18, 638), Point<float> (1182, 638), Point<float> (18, 742), Point<float> (1182, 742) })
-            drawScrew (g, pnt);
+        g.setGradientFill (ColourGradient (col::amber.withAlpha (0.07f), 600, 0, col::amber.withAlpha (0.0f), 600, 520, true));
+        g.fillRect (0, 0, 1200, 612);
 
-        g.setColour (col::ink); g.setFont (label (23.0f, 0.42f));
-        g.drawText ("POTATO KICKER", Rectangle<float> (0, 12, 1200, 30), Justification::centred, false);
-        g.setColour (col::inkDim); g.setFont (label (15.5f, 0.32f));
-        g.drawText ("KICK & BASS GENERATOR", Rectangle<float> (0, 578, 1200, 20), Justification::centred, false);
+        drawTile (g, { 12, 40, 292, 566 });      // oscillator / pitch / character
+        drawTile (g, { 310, 400, 580, 206 });    // amp envelope
+        drawTile (g, { 896, 40, 292, 566 });     // meter / compressor / volume
+        drawTile (g, { 12, 616, 1176, 140 });    // preset strip
 
-        section (g, "OSCILLATOR", 30, 46, 260);
-        section (g, "PITCH ENVELOPE", 30, 212, 260);
-        section (g, "CHARACTER", 30, 362, 260);
-        section (g, "COMPRESSOR", 910, 214, 260);
+        g.setFont (label (29.0f, 0.38f, true));
+        glowTextRamp (g, "POTATO KICKER", Rectangle<float> (380, 4, 440, 32), Justification::centred, 0.35f);
+        g.setFont (mono (12.0f)); g.setColour (Colour (0xffb98c62));
+        g.drawText (CharPointer_UTF8 ("KICK & BASS SYNTH  \xc2\xb7  100 PRESETS"), Rectangle<float> (16, 12, 300, 16), Justification::centredLeft, false);
+        g.drawText (CharPointer_UTF8 ("VST3 \xc2\xb7 AU  \xc2\xb7  WIN \xc2\xb7 MAC"), Rectangle<float> (884, 12, 300, 16), Justification::centredRight, false);
+        g.setFont (label (17.0f, 0.32f));
+        glowTextRamp (g, "KICK & BASS GENERATOR", Rectangle<float> (440, 577, 320, 21), Justification::centred, 0.2f);
+
+        section (g, "OSCILLATOR", 30, 46, 256);
+        section (g, "PITCH ENVELOPE", 30, 212, 256);
+        section (g, "CHARACTER", 30, 362, 256);
+        section (g, "COMPRESSOR", 912, 214, 260);
         section (g, "AMP ENVELOPE", 330, 408, 540);
 
         // strip captions
-        g.setColour (col::ink); g.setFont (label (13.0f, 0.16f));
-        auto cap = [&] (const String& s, float cx, float y) { g.drawText (s, Rectangle<float> (cx - 120, y, 240, 16), Justification::centred, false); };
+        g.setFont (label (15.0f, 0.14f));
+        auto cap = [&] (const String& s, float cx, float y) { glowText (g, s, Rectangle<float> (cx - 120, y, 240, 17), Justification::centred, col::ink, 0.22f); };
         cap ("GENRE", 151, 688);
         cap ("PRESET", 356, 694);
         cap ("CLICK NAME TO BROWSE ALL 100", 593, 688);
         cap ("MIDI IN", 777, 688);
         cap ("OUTPUT", 891, 688);
         cap ("TRIGGER", 1009, 704);
-        g.setFont (label (22.0f, 0.3f, true));
-        g.drawText ("VST3", Rectangle<float> (1050, 652, 118, 26), Justification::centredRight, false);
-        g.setColour (col::inkDim); g.setFont (mono (12.0f));
-        g.drawText (CharPointer_UTF8 ("WIN 11 \xc2\xb7 macOS"), Rectangle<float> (1030, 680, 138, 14), Justification::centredRight, false);
-        g.drawText (CharPointer_UTF8 ("100 PRESETS"), Rectangle<float> (1050, 695, 118, 14), Justification::centredRight, false);
     }
 
 private:
@@ -1433,43 +1653,46 @@ private:
         }
     }
 
-    static void drawPlate (Graphics& g, Rectangle<float> r)
+    // Dark HUD tile with a thin orange border and bright corner brackets
+    static void drawTile (Graphics& g, Rectangle<float> r)
     {
-        ColourGradient grad (Colour (0xff1b1b1e), 0, r.getY(), Colour (0xff0e0e10), 0, r.getBottom(), false);
-        grad.addColour (0.45, Colour (0xff141416));
-        g.setColour (Colours::black.withAlpha (0.5f)); g.fillRoundedRectangle (r.translated (0, 6), 6);
-        g.setGradientFill (grad); g.fillRoundedRectangle (r, 6);
-        {
-            Graphics::ScopedSaveState s (g);
-            g.reduceClipRegion (r.toNearestInt());
-            g.setColour (Colours::white.withAlpha (0.018f));
-            for (float y = r.getY(); y < r.getBottom(); y += 3.0f) g.drawHorizontalLine ((int) y, r.getX(), r.getRight());
-        }
-        g.setColour (Colours::white.withAlpha (0.08f)); g.drawHorizontalLine ((int) r.getY() + 1, r.getX() + 4, r.getRight() - 4);
-        g.setColour (Colours::black.withAlpha (0.6f)); g.drawHorizontalLine ((int) r.getBottom() - 2, r.getX() + 4, r.getRight() - 4);
-    }
-
-    static void drawScrew (Graphics& g, Point<float> c)
-    {
-        const auto r = Rectangle<float> (13, 13).withCentre (c);
-        g.setGradientFill (ColourGradient (Colour (0xff6b6b70), c.x - 2, c.y - 3, Colour (0xff1a1a1c), c.x + 6, c.y + 6, true));
-        g.fillEllipse (r);
-        g.setColour (Colours::black); g.drawEllipse (r, 1.0f);
-        const auto a = polar (c, 4.5f, 125.0f), b = polar (c, 4.5f, -55.0f);
-        g.setColour (Colour (0xff0a0a0a)); g.drawLine (a.x, a.y, b.x, b.y, 2.0f);
+        g.setColour (Colours::black.withAlpha (0.55f)); g.fillRoundedRectangle (r.translated (0, 4), 9);
+        g.setGradientFill (ColourGradient (Colour (0xff141210), 0, r.getY(), Colour (0xff0b0a09), 0, r.getBottom(), false));
+        g.fillRoundedRectangle (r, 9);
+        g.setGradientFill (ColourGradient (col::line.withAlpha (0.06f), 0, r.getY(), col::line.withAlpha (0.0f), 0, r.getY() + 46, false));
+        g.fillRoundedRectangle (r, 9);
+        g.setGradientFill (ColourGradient (col::orange.withAlpha (0.3f), r.getX(), 0, col::yellow.withAlpha (0.3f), r.getRight(), 0, false));
+        g.drawRoundedRectangle (r.reduced (0.5f), 9, 1.0f);
+        // light strip along the top edge
+        const float lx0 = r.getX() + 26, lx1 = r.getRight() - 26;
+        g.setGradientFill (ColourGradient (col::orange.withAlpha (0.0f), lx0, 0, col::orange.withAlpha (0.0f), lx1, 0, false));
+        auto strip = ColourGradient (col::orange.withAlpha (0.0f), lx0, 0, col::yellow.withAlpha (0.0f), lx1, 0, false);
+        strip.addColour (0.15, col::orange.withAlpha (0.9f));
+        strip.addColour (0.85, col::yellow.withAlpha (0.9f));
+        auto glow = strip; glow.multiplyOpacity (0.22f);
+        g.setGradientFill (glow);  g.fillRoundedRectangle (lx0, r.getY() - 1.5f, lx1 - lx0, 6.0f, 3.0f);
+        g.setGradientFill (strip); g.fillRect (lx0, r.getY() + 0.5f, lx1 - lx0, 1.6f);
+        g.setGradientFill (ColourGradient (col::orange.withAlpha (0.95f), r.getX(), 0, col::yellow.withAlpha (0.95f), r.getRight(), 0, false));
+        const float L = 16.0f, t = 2.0f, x0 = r.getX() + 3, y0 = r.getY() + 3, x1 = r.getRight() - 3, y1 = r.getBottom() - 3;
+        g.fillRect (x0, y0, L, t);         g.fillRect (x0, y0, t, L);
+        g.fillRect (x1 - L, y0, L, t);     g.fillRect (x1 - t, y0, t, L);
+        g.fillRect (x0, y1 - t, L, t);     g.fillRect (x0, y1 - L, t, L);
+        g.fillRect (x1 - L, y1 - t, L, t); g.fillRect (x1 - t, y1 - L, t, L);
     }
 
     static void section (Graphics& g, const String& text, float x, float y, float w)
     {
-        const auto f = label (12.5f, 0.24f);
-        const float tw = GlyphArrangement::getStringWidth (f, text) + 20.0f;
-        const float cy = y + 7.0f, mid = x + w * 0.5f;
-        g.setGradientFill (ColourGradient (Colour (0x003a3a3f), x, cy, Colour (0xff3a3a3f), mid - tw * 0.5f, cy, false));
-        g.drawHorizontalLine ((int) cy, x, mid - tw * 0.5f);
-        g.setGradientFill (ColourGradient (Colour (0xff3a3a3f), mid + tw * 0.5f, cy, Colour (0x003a3a3f), x + w, cy, false));
-        g.drawHorizontalLine ((int) cy, mid + tw * 0.5f, x + w);
-        g.setColour (col::inkDim); g.setFont (f);
-        g.drawText (text, Rectangle<float> (mid - tw * 0.5f, y, tw, 15), Justification::centred, false);
+        const auto f = label (15.0f, 0.22f);
+        const float tw = GlyphArrangement::getStringWidth (f, text) + 32.0f;
+        const float cy = y + 7.0f, mid = x + w * 0.5f, l = mid - tw * 0.5f, r = mid + tw * 0.5f;
+        g.setGradientFill (ColourGradient (col::line.withAlpha (0.0f), x, cy, col::line.withAlpha (0.45f), l, cy, false));
+        g.fillRect (x, cy, l - x, 1.0f);
+        g.setGradientFill (ColourGradient (col::line.withAlpha (0.45f), r, cy, col::line.withAlpha (0.0f), x + w, cy, false));
+        g.fillRect (r, cy, x + w - r, 1.0f);
+        drawLed (g, Rectangle<float> (5, 5).withCentre ({ l + 5, cy + 0.5f }), true);
+        drawLed (g, Rectangle<float> (5, 5).withCentre ({ r - 5, cy + 0.5f }), true);
+        g.setFont (f);
+        glowTextRamp (g, text, Rectangle<float> (l + 10, y - 1, tw - 20, 17), Justification::centred, 0.25f);
     }
 
     PotatoKickerProcessor& proc;
@@ -1485,6 +1708,9 @@ private:
     SevenSeg seg;
     LedDot midiLed;
     TriggerButton trigger;
+    PotatoBadge badge;
+    LevelLights levelLights;
+    float badgeLevel = 0.0f;
     PresetBrowser browser;
     ParameterAttachment stereoAttach;
     uint32_t lastCounter = 0;
