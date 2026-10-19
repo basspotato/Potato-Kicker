@@ -15,11 +15,27 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Configure (Visual Studio 2022, x64)
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      # Runs a command; on failure, posts the tail of its output as an annotation so it is visible on the run page
+      - name: Configure (newest installed Visual Studio, x64)
+        shell: pwsh
+        run: |
+          cmake --version
+          cmake -S . -B build -A x64 *>&1 | Tee-Object -FilePath configure.log
+          if ($LASTEXITCODE -ne 0) {
+            $tail = (Get-Content configure.log -Tail 40) -join '%0A'
+            Write-Output "::error title=Configure failed::$tail"
+            exit 1
+          }
 
       - name: Build VST3 (Release)
-        run: cmake --build build --config Release --target PotatoKicker_VST3 --parallel
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --target PotatoKicker_VST3 --parallel *>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            $errs = (Select-String -Path build.log -Pattern 'error' | Select-Object -First 30 | ForEach-Object { $_.Line }) -join '%0A'
+            Write-Output "::error title=Build failed::$errs"
+            exit 1
+          }
 
       - name: Upload VST3
         uses: actions/upload-artifact@v4
@@ -34,5 +50,10 @@ jobs:
           Invoke-WebRequest -Uri "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip" -OutFile pluginval.zip
           Expand-Archive pluginval.zip -DestinationPath pluginval
           $exe = Get-ChildItem -Path pluginval -Recurse -Filter pluginval.exe | Select-Object -First 1
-          & $exe.FullName --strictness-level 5 --validate-in-process --timeout-ms 120000 --validate "build/PotatoKicker_artefacts/Release/VST3/Potato-Kicker.vst3"
-          if ($LASTEXITCODE -ne 0) { throw "pluginval reported problems" }
+          & $exe.FullName --strictness-level 5 --validate-in-process --timeout-ms 120000 --validate "build/PotatoKicker_artefacts/Release/VST3/Potato-Kicker.vst3" *>&1 | Tee-Object -FilePath pluginval.log
+          if ($LASTEXITCODE -ne 0) {
+            $tail = (Get-Content pluginval.log -Tail 40) -join '%0A'
+            Write-Output "::error title=pluginval failed::$tail"
+            exit 1
+          }
+          Write-Output "::notice title=pluginval::Passed at strictness level 5"
