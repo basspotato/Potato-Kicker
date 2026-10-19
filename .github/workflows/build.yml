@@ -70,7 +70,7 @@ jobs:
         run: |
           cmake --version
           set -o pipefail
-          cmake -S . -B build -G Xcode 2>&1 | tee configure.log || { echo "::error title=Configure failed::$(tail -40 configure.log | sed ':a;N;$!ba;s/\n/%0A/g')"; exit 1; }
+          cmake -S . -B build -G Xcode -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" 2>&1 | tee configure.log || { echo "::error title=Configure failed::$(tail -40 configure.log | sed ':a;N;$!ba;s/\n/%0A/g')"; exit 1; }
 
       - name: Build VST3 and AU (Release)
         run: |
@@ -85,7 +85,9 @@ jobs:
             codesign --force --deep --sign - "$b"
             codesign --verify --verbose "$b"
           done
-          lipo -info "$OUT/VST3/Potato-Kicker.vst3/Contents/MacOS/Potato-Kicker"
+          ARCHS=$(lipo -archs "$OUT/VST3/Potato-Kicker.vst3/Contents/MacOS/Potato-Kicker")
+          echo "::notice title=macOS architectures::$ARCHS"
+          case "$ARCHS" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "::error title=Not a universal binary::$ARCHS"; exit 1;; esac
           # ditto keeps the bundle structure and executable permissions intact
           ditto -c -k --keepParent "$OUT/VST3/Potato-Kicker.vst3" dist/Potato-Kicker-VST3-macOS.zip
           ditto -c -k --keepParent "$OUT/AU/Potato-Kicker.component" dist/Potato-Kicker-AU-macOS.zip

@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.22)
 
 # macOS: universal binary (Apple Silicon + Intel), runs on macOS 11 Big Sur and later
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
-if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+# (APPLE is not defined before project(), so test the host system instead)
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin" AND NOT CMAKE_OSX_ARCHITECTURES)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
 endif()
 

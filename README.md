@@ -22,7 +22,6 @@ Every push to `main` builds the plugins with GitHub Actions.
 
 ### Windows
 
-
 1. Open the repository's **Actions** tab and pick the latest **Build plugins** run.
 2. Download the **Potato-Kicker-VST3-Windows-x64** artifact and unzip it.
 3. Copy the `Potato-Kicker.vst3` folder to `C:\Program Files\Common Files\VST3\`.
