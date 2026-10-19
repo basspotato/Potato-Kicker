@@ -123,6 +123,84 @@ namespace
         g.setColour (Colour (0xfff5f1e8));
         g.drawLine (p1.x, p1.y, p2.x, p2.y, jmax (2.0f, size * 0.026f));
     }
+    // Envelope knob: the black Shadow Hills style knob with a backlit light-pipe ring set into a groove.
+    // The ring, the lit scale ticks and the under-glow get brighter and shift toward a lighter tint as the
+    // knob turns right, and dim back down as it turns left.
+    void drawLitKnob (Graphics& g, Point<float> c, float size, float norm, Colour base, Colour peak)
+    {
+        const float n = jlimit (0.0f, 1.0f, norm);
+        const float k = 0.25f + 0.75f * n;                       // light intensity
+        const Colour col = base.interpolatedWith (peak, n * 0.75f);
+        const float rO = size * 0.5f - 1.5f;
+        const float rB = size * 0.25f;                           // knob body (slightly smaller to make room for the ring)
+        const float rR = rB + 5.6f, rw = 3.4f;                   // light-pipe radius and width
+        const float a0 = degToRad (-135.0f), a = degToRad (-135.0f + 270.0f * n);
+
+        // scale ticks: lit in the accent colour up to the current value
+        for (int i = 0; i <= 40; ++i)
+        {
+            const bool major = i % 4 == 0;
+            const float t = (float) i / 40.0f;
+            const bool on = t <= n + 0.0001f && n > 0.001f;
+            const auto p1 = polar (c, major ? rO - 5.0f : rO - 3.0f, -135.0f + 270.0f * t), p2 = polar (c, rO, -135.0f + 270.0f * t);
+            if (on)
+            {
+                g.setColour (col.withAlpha (0.25f * k));
+                g.drawLine (p1.x, p1.y, p2.x, p2.y, major ? 3.4f : 2.4f);
+            }
+            g.setColour (on ? col.brighter (0.3f).withAlpha (0.55f + 0.45f * k) : col::tick.withAlpha (major ? 0.95f : 0.55f));
+            g.drawLine (p1.x, p1.y, p2.x, p2.y, major ? 1.3f : 0.8f);
+        }
+
+        // numbers 0..10, pushed out to sit between the ticks and the ring
+        const float rn = rO - 11.0f;
+        g.setFont (label (size * 0.084f * 1.15f));
+        for (int j = 0; j <= 10; ++j)
+        {
+            const bool on = j / 10.0f <= n + 0.0001f && n > 0.001f;
+            g.setColour (on ? Colour (0xfff2eee6) : Colour (0xffb9b4aa));
+            g.drawText (String (j), Rectangle<float> (12.0f, 10.0f).withCentre (polar (c, rn, -135.0f + j * 27.0f)), Justification::centred, false);
+        }
+
+        // recessed groove and the dim backlit ring
+        const auto ringBox = [&] (float r) { return Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (c); };
+        g.setColour (Colour (0xff040405)); g.drawEllipse (ringBox (rR), rw + 3.0f);
+        g.setColour (Colours::white.withAlpha (0.06f)); g.drawEllipse (ringBox (rR + rw * 0.5f + 1.6f), 0.8f);
+        g.setColour (col.withAlpha (0.05f + 0.10f * k)); g.drawEllipse (ringBox (rR), rw * 2.4f);
+        g.setColour (col.withAlpha (0.10f + 0.28f * k)); g.drawEllipse (ringBox (rR), rw * 0.8f);
+
+        // value arc with bloom; every layer scales with the knob position
+        if (n > 0.001f)
+        {
+            Path arc; arc.addCentredArc (c.x, c.y, rR, rR, 0.0f, a0, a, true);
+            auto stroke = [&] (float wdt, Colour cc) { g.setColour (cc); g.strokePath (arc, PathStrokeType (wdt, PathStrokeType::curved, PathStrokeType::rounded)); };
+            stroke (rw * 3.6f, col.withAlpha (0.16f * k));
+            stroke (rw * 2.2f, col.withAlpha (0.30f * k));
+            stroke (rw * 1.1f, col.withAlpha (0.55f + 0.40f * k));
+            stroke (rw * 0.7f, col.brighter (0.25f + 0.35f * n));
+            stroke (1.0f, Colours::white.withAlpha (0.25f + 0.55f * n));
+        }
+
+        // light spilling onto the skirt from the ring
+        g.setColour (col.withAlpha (0.10f + 0.30f * k)); g.drawEllipse (ringBox (rB + 2.2f), 1.6f);
+
+        // skirt, glossy body, shine (same finish as the other knobs)
+        g.setGradientFill (ColourGradient (Colour (0xff3c3c41), c.x, c.y - rB - 3, Colours::black, c.x, c.y + rB + 3, false));
+        g.fillEllipse (ringBox (rB + 1.6f));
+        ColourGradient body (Colour (0xff505056), c.x - rB * 0.2f, c.y - rB * 0.4f, Colour (0xff020202), c.x - rB * 0.2f + rB * 1.56f, c.y - rB * 0.4f, true);
+        body.addColour (0.32, Colour (0xff1d1d20));
+        g.setGradientFill (body); g.fillEllipse (ringBox (rB - 1.0f));
+        g.setColour (Colours::black); g.drawEllipse (ringBox (rB - 1.0f), 0.8f);
+        const Point<float> sc (c.x - rB * 0.22f, c.y - rB * 0.4f);
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.26f), sc.x, sc.y, Colours::white.withAlpha (0.0f), sc.x + rB * 0.55f, sc.y, true));
+        g.fillEllipse (Rectangle<float> (rB * 1.1f, rB * 0.6f).withCentre (sc));
+
+        // pointer: white line over a soft glow in the accent colour
+        const auto p1 = polar (c, rB * 0.15f, -135.0f + 270.0f * n), p2 = polar (c, rB - 3.0f, -135.0f + 270.0f * n);
+        g.setColour (col.withAlpha (0.20f + 0.45f * k)); g.drawLine (p1.x, p1.y, p2.x, p2.y, 5.0f);
+        g.setColour (Colour (0xfff5f1e8)); g.drawLine (p1.x, p1.y, p2.x, p2.y, jmax (2.0f, size * 0.026f));
+        g.setColour (col.brighter (0.5f).withAlpha (0.4f + 0.6f * k)); g.fillEllipse (Rectangle<float> (3.6f, 3.6f).withCentre (p2));
+    }
 }
 
 //==============================================================================
@@ -142,13 +220,18 @@ public:
 
     void placeAt (int cx, int cy) { setBounds (cx - ((int) size + 40) / 2, cy - (int) size / 2 - 18, (int) size + 40, (int) size + 34); }
 
+    // Gives this knob a backlit ring: colour at the left end of travel, and the lighter tint it moves toward at full right
+    void setAccent (Colour base, Colour peak) { accent = base; accentPeak = peak; lit = true; repaint(); }
+
     void paint (Graphics& g) override
     {
         const float w = (float) getWidth();
         g.setColour (col::ink); g.setFont (label (13.5f, 0.12f));
         g.drawText (name, Rectangle<float> (0, 0, w, 17), Justification::centred, false);
-        drawKnob (g, { w * 0.5f, 18.0f + size * 0.5f }, size, param.getValue(), size >= 84.0f);
-        g.setColour (dragging ? col::amber : col::inkDim); g.setFont (mono (11.0f));
+        if (lit) drawLitKnob (g, { w * 0.5f, 18.0f + size * 0.5f }, size, param.getValue(), accent, accentPeak);
+        else     drawKnob (g, { w * 0.5f, 18.0f + size * 0.5f }, size, param.getValue(), size >= 84.0f);
+        const Colour valueCol = lit ? accent.interpolatedWith (accentPeak, 0.6f) : col::amber;
+        g.setColour (dragging ? valueCol : col::inkDim); g.setFont (mono (11.0f));
         g.drawText (pk::formatValue (param.getParameterID(), value()), Rectangle<float> (0, 18.0f + size, w, 15), Justification::centred, false);
         if (hasKeyboardFocus (false))
         {
@@ -199,6 +282,8 @@ private:
     bool dragging = false;
     int startY = 0;
     float startN = 0.0f;
+    bool lit = false;
+    Colour accent, accentPeak;
 };
 
 //==============================================================================
@@ -1028,6 +1113,7 @@ public:
             auto* k = knobs.add (new Knob (*s.getParameter (id), title, size));
             addAndMakeVisible (k);
             k->placeAt (x, y);
+            return k;
         };
 
         waveSwitch = std::make_unique<WaveSwitch> (*s.getParameter (pk::id::wave));
@@ -1043,10 +1129,10 @@ public:
         knob (pk::id::ratio,  "RATIO",       92, 1105, 300);
         knob (pk::id::makeup, "MAKEUP",      80, 975, 432);
         knob (pk::id::vol,    "VOLUME",      88, 1040, 550);
-        knob (pk::id::atk,    "ATTACK",     100, 390, 492);
-        knob (pk::id::dec,    "DECAY",      100, 530, 492);
-        knob (pk::id::sus,    "SUSTAIN",    100, 670, 492);
-        knob (pk::id::rel,    "RELEASE",    100, 810, 492);
+        knob (pk::id::atk,    "ATTACK",     100, 390, 492)->setAccent (Colour (0xff5a1aa8), Colour (0xffb98cff));   // dark purple
+        knob (pk::id::dec,    "DECAY",      100, 530, 492)->setAccent (Colour (0xff1550d8), Colour (0xff8cc2ff));   // blue
+        knob (pk::id::sus,    "SUSTAIN",    100, 670, 492)->setAccent (Colour (0xffd85a08), Colour (0xffffb46a));   // orange
+        knob (pk::id::rel,    "RELEASE",    100, 810, 492)->setAccent (Colour (0xffd8a800), Colour (0xfffff08a));   // yellow
 
         auto toggle = [&] (const char* id, const char* title, const char* on, const char* off, int x, int y)
         {
