@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.22)
 
+# macOS: universal binary (Apple Silicon + Intel), runs on macOS 11 Big Sur and later
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
+if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
+endif()
+
 project(PotatoKicker VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -37,7 +43,8 @@ juce_add_plugin(PotatoKicker
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     VST3_CATEGORIES Instrument Drum Synth
-    FORMATS VST3
+    FORMATS VST3 AU
+    AU_MAIN_TYPE kAudioUnitType_MusicDevice
     COPY_PLUGIN_AFTER_BUILD FALSE)
 
 juce_add_binary_data(PotatoKickerFonts SOURCES

@@ -48,6 +48,16 @@ public:
     std::atomic<int>   heldNotes { 0 };
     std::atomic<uint32_t> noteOnCounter { 0 };       // editor watches this to animate the display playhead
 
+    // Output scope for the display's WAVE view: the audio thread writes, the editor reads
+    static constexpr int scopeSize = 1 << 15;
+    int getScopeWritePos() const noexcept { return scopePos.load (std::memory_order_acquire); }
+    void copyScope (float* dest, int numSamples, int endPos) const noexcept
+    {
+        const int start = (endPos - numSamples) & (scopeSize - 1);
+        for (int i = 0; i < numSamples; ++i)
+            dest[i] = scope[(size_t) ((start + i) & (scopeSize - 1))].load (std::memory_order_relaxed);
+    }
+
 private:
     pk::KickEngine engine;
     juce::Array<juce::RangedAudioParameter*> presetParams;
@@ -58,6 +68,8 @@ private:
         std::atomic<float>* keytrack; std::atomic<float>* velocity;
     } raw {};
     int notesDown = 0;
+    std::array<std::atomic<float>, scopeSize> scope {};
+    std::atomic<int> scopePos { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PotatoKickerProcessor)
 };

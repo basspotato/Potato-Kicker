@@ -107,6 +107,14 @@ void PotatoKickerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     }
     renderTo (numSamples);
 
+    int sp = scopePos.load (std::memory_order_relaxed);
+    for (int i = 0; i < numSamples; ++i)
+    {
+        scope[(size_t) sp].store (R != nullptr ? 0.5f * (L[i] + R[i]) : L[i], std::memory_order_relaxed);
+        sp = (sp + 1) & (scopeSize - 1);
+    }
+    scopePos.store (sp, std::memory_order_release);
+
     heldNotes = notesDown;
     meterRms = std::sqrt (sumSq / (float) juce::jmax (1, numSamples));
     meterGr = gr;

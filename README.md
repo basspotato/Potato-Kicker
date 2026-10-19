@@ -1,6 +1,6 @@
 # Potato-Kicker
 
-A kick drum and bass generator for EDM, built as a VST3 instrument for Windows 11 (x64).
+A kick drum and bass generator for EDM, built as a VST3 instrument for Windows 11 (x64) and as VST3 + Audio Unit for macOS 11 or later (Apple Silicon and Intel).
 
 ## Features
 
@@ -12,18 +12,34 @@ A kick drum and bass generator for EDM, built as a VST3 instrument for Windows 1
 - **Character:** Click (noise and tone transient) and Drive (tanh saturation).
 - **Compressor:** Threshold, Ratio, Makeup and an In/Out switch, plus a gain-reduction meter.
 - **Output:** Volume, a Mono/Stereo switch (stereo widens the upper harmonics and keeps the low end mono), a soft output ceiling and a VU meter.
-- **Display:** shows the rendered sound. Its Amp, Pitch and Comp tabs each have points you can drag with the mouse.
+- **Display:** shows the rendered sound. Its Amp, Pitch and Comp tabs each have points you can drag with the mouse, and the Wave tab shows the live output as a scrolling, colour-coded waveform.
 - **MIDI:** Key Track (C1 plays the Tune pitch, other notes transpose from there) and Velocity on/off. Works on any MIDI track, for example in Cubase.
 - **100 factory presets:** 10 each for House, Tech-House, Techno, EDM, Festival, Progressive, Drum & Bass, Dubstep, Analog and Trap. They're also exposed to the DAW's program list.
 
 ## Getting the plugin
 
-Every push to `main` builds the plugin with GitHub Actions:
+Every push to `main` builds the plugins with GitHub Actions.
 
-1. Open the repository's **Actions** tab and pick the latest **Build Windows VST3** run.
+### Windows
+
+
+1. Open the repository's **Actions** tab and pick the latest **Build plugins** run.
 2. Download the **Potato-Kicker-VST3-Windows-x64** artifact and unzip it.
 3. Copy the `Potato-Kicker.vst3` folder to `C:\Program Files\Common Files\VST3\`.
 4. Rescan plugins in your DAW. In Cubase, open **Studio > VST Plug-in Manager** and click **Rescan**.
+
+### macOS
+
+1. From the same run, download **Potato-Kicker-macOS-Universal**. It contains two zips: one for the VST3 and one for the Audio Unit.
+2. Unzip them and copy the plugins into place:
+   - `Potato-Kicker.vst3` → `~/Library/Audio/Plug-Ins/VST3/` (Cubase, Ableton Live, Bitwig, Studio One)
+   - `Potato-Kicker.component` → `~/Library/Audio/Plug-Ins/Components/` (Logic Pro, GarageBand, Ableton Live)
+3. The plugins are not notarized, so macOS blocks them the first time. In Terminal, clear the download flag:
+   ```
+   xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Potato-Kicker.vst3
+   xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/Potato-Kicker.component
+   ```
+4. Restart or rescan in your DAW.
 
 ## Building locally (Windows)
 

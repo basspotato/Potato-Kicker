@@ -126,18 +126,19 @@ namespace
     // Envelope knob: the black Shadow Hills style knob with a backlit light-pipe ring set into a groove.
     // The ring, the lit scale ticks and the under-glow get brighter and shift toward a lighter tint as the
     // knob turns right, and dim back down as it turns left.
-    void drawLitKnob (Graphics& g, Point<float> c, float size, float norm, Colour base, Colour peak)
+    void drawLitKnob (Graphics& g, Point<float> c, float size, float norm, Colour base, Colour peak, bool numbered = true, bool ticks = true)
     {
         const float n = jlimit (0.0f, 1.0f, norm);
         const float k = 0.25f + 0.75f * n;                       // light intensity
         const Colour col = base.interpolatedWith (peak, n * 0.75f);
         const float rO = size * 0.5f - 1.5f;
         const float rB = size * 0.25f;                           // knob body (slightly smaller to make room for the ring)
-        const float rR = rB + 5.6f, rw = 3.4f;                   // light-pipe radius and width
+        const float rw = size * 0.034f;                          // light-pipe width
+        const float rR = rB + rw * 0.5f + size * 0.04f;          // light-pipe radius
         const float a0 = degToRad (-135.0f), a = degToRad (-135.0f + 270.0f * n);
 
         // scale ticks: lit in the accent colour up to the current value
-        for (int i = 0; i <= 40; ++i)
+        for (int i = 0; ticks && i <= 40; ++i)
         {
             const bool major = i % 4 == 0;
             const float t = (float) i / 40.0f;
@@ -153,9 +154,9 @@ namespace
         }
 
         // numbers 0..10, pushed out to sit between the ticks and the ring
-        const float rn = rO - 11.0f;
+        const float rn = 0.5f * ((rR + rw * 0.5f + 1.2f) + (rO - 5.0f));
         g.setFont (label (size * 0.084f * 1.15f));
-        for (int j = 0; j <= 10; ++j)
+        for (int j = 0; numbered && j <= 10; ++j)
         {
             const bool on = j / 10.0f <= n + 0.0001f && n > 0.001f;
             g.setColour (on ? Colour (0xfff2eee6) : Colour (0xffb9b4aa));
@@ -228,7 +229,7 @@ public:
         const float w = (float) getWidth();
         g.setColour (col::ink); g.setFont (label (13.5f, 0.12f));
         g.drawText (name, Rectangle<float> (0, 0, w, 17), Justification::centred, false);
-        if (lit) drawLitKnob (g, { w * 0.5f, 18.0f + size * 0.5f }, size, param.getValue(), accent, accentPeak);
+        if (lit) drawLitKnob (g, { w * 0.5f, 18.0f + size * 0.5f }, size, param.getValue(), accent, accentPeak, size >= 84.0f);
         else     drawKnob (g, { w * 0.5f, 18.0f + size * 0.5f }, size, param.getValue(), size >= 84.0f);
         const Colour valueCol = lit ? accent.interpolatedWith (accentPeak, 0.6f) : col::amber;
         g.setColour (dragging ? valueCol : col::inkDim); g.setFont (mono (11.0f));
@@ -311,7 +312,7 @@ public:
             g.setColour (i == index ? col::ink : col::inkDim); g.setFont (label (12.5f, 0.1f));
             g.drawText (pk::waveNames[i], Rectangle<float> (40, 14).withCentre (polar (c, 58, angles[i])), Justification::centred, false);
         }
-        drawKnob (g, c, 64.0f, (angles[index] + 135.0f) / 270.0f, false, false);
+        drawLitKnob (g, c, 76.0f, (angles[index] + 135.0f) / 270.0f, Colour (0xffd9dde2), Colours::white, false, false);
         g.setColour (col::ink); g.setFont (label (12.5f, 0.12f));
         g.drawText ("WAVEFORM", Rectangle<float> (120, 16).withCentre ({ c.x, c.y + 48 }), Justification::centred, false);
     }
@@ -457,6 +458,8 @@ public:
         setTitle ("Sound display");
     }
 
+    void showView (int v) { view = jlimit (0, 3, v); repaint(); }
+
     void tick()
     {
         const auto now = proc.readParams();
@@ -468,6 +471,7 @@ public:
         const auto cnt = proc.noteOnCounter.load();
         if (cnt != lastCounter) { lastCounter = cnt; playStart = Time::getMillisecondCounterHiRes(); }
         grShow += (proc.meterGr.load() - grShow) * 0.2f;
+        feedWave();
         repaint();
     }
 
@@ -479,8 +483,8 @@ public:
         g.setColour (Colour (0xff26262a)); g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 16.0f, 2.0f);
 
         // tabs
-        const char* names[3] { "AMP", "PITCH", "COMP" };
-        for (int i = 0; i < 3; ++i)
+        const char* names[4] { "AMP", "PITCH", "COMP", "WAVE" };
+        for (int i = 0; i < 4; ++i)
         {
             const auto r = tabRect (i);
             if (i == view)
@@ -502,7 +506,7 @@ public:
         }
         g.setColour (col::amber); g.setFont (mono (13.0f));
         g.drawText (pk::noteName (last.tune) + " · " + String (last.tune, 1) + " Hz · " + pk::waveNames[last.wave],
-                    Rectangle<float> (250, 12, 292, 22), Justification::centredRight, false);
+                    Rectangle<float> (300, 12, 242, 22), Justification::centredRight, false);
 
         // screen
         {
@@ -514,17 +518,19 @@ public:
         g.setColour (Colours::black); g.drawRoundedRectangle (scr.toFloat(), 7.0f, 1.0f);
 
         // footer
-        const char* foot[3] { "Drag ATTACK, DECAY/SUSTAIN and RELEASE points", "Drag START, PITCH TIME and TUNE points", "Drag THRESHOLD/MAKEUP and RATIO points" };
+        const char* foot[4] { "Drag ATTACK, DECAY/SUSTAIN and RELEASE points", "Drag START, PITCH TIME and TUNE points", "Drag THRESHOLD/MAKEUP and RATIO points", "Live output, last 2.4 seconds" };
         g.setColour (Colour (0xff7d6a4c)); g.setFont (mono (11.5f));
         g.drawText (foot[view], Rectangle<float> (22, 312, 400, 16), Justification::centredLeft, false);
         const String right = view == 0 ? (last.oneShot() ? "one-shot kick" : "gated bass")
-                           : view == 1 ? "+" + String (roundToInt (last.pamt)) + " st" : String (last.ratio, 1) + ":1";
+                           : view == 1 ? "+" + String (roundToInt (last.pamt)) + " st"
+                           : view == 2 ? String (last.ratio, 1) + ":1"
+                           : "peak " + (wavePeakDb > -60.0f ? String (wavePeakDb, 1) + " dB" : String ("-inf"));
         g.drawText (right, Rectangle<float> (342, 312, 200, 16), Justification::centredRight, false);
     }
 
     void mouseDown (const MouseEvent& e) override
     {
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < 4; ++i)
             if (tabRect (i).contains (e.position)) { view = i; hover = {}; repaint(); return; }
 
         const auto p = toScreen (e.position);
@@ -584,7 +590,7 @@ private:
 
     Rectangle<float> tabRect (int i) const
     {
-        const float w[3] { 54, 66, 64 };
+        const float w[4] { 54, 66, 64, 62 };
         float x = 22;
         for (int j = 0; j < i; ++j) x += w[j] + 8;
         return { x, 14, w[i], 22 };
@@ -656,6 +662,7 @@ private:
                      { "P1", tx (v.pdec * 0.001f), fy (v.pitchAt (v.pdec * 0.001f)), "PITCH TIME " + pk::fmtMs (v.pdec) },
                      { "P2", PL + GW * 0.92f, fy (v.tune), "TUNE " + pk::formatValue (pk::id::tune, v.tune) } };
         }
+        if (view != 2) return {};
         return { { "T", cxd (v.thr), cyd (v.thr + v.makeup), "THRESHOLD " + String (v.thr, 1) + " dB · MAKEUP +" + String (v.makeup, 1) },
                  { "Q", cxd (0.0f), cyd (compOut (0.0f)), "RATIO " + String (v.ratio, 1) + ":1" } };
     }
@@ -698,6 +705,7 @@ private:
 
     void drawScreen (Graphics& g)
     {
+        if (view == 3) { drawWave (g); return; }
         g.setGradientFill (ColourGradient (Colour (0xff1e1408), CW * 0.5f, CH * 0.9f, Colour (0xff0a0703), CW * 0.5f + CW * 0.7f, CH * 0.9f, true));
         g.fillRect (0, 0, CW, CH);
 
@@ -858,6 +866,176 @@ private:
             }
         }
     }
+
+
+    //==========================================================================
+    // WAVE view: scrolling live output in the Magic Touch waveform style.
+    // Each 1-px column is coloured by how the energy splits across six bands (sub at the edge, air at the
+    // centre), kicks pull the lows toward plum, and the top half is mirrored below a glowing horizon.
+    static constexpr float wavePxPerSec = 200.0f;
+
+    void feedWave()
+    {
+        const int pos = proc.getScopeWritePos();
+        if (view != 3 || waveLastPos < 0) { waveLastPos = pos; if (view != 3) return; }
+        const double srate = proc.getSampleRate() > 0.0 ? proc.getSampleRate() : 48000.0;
+        const int w = GW, h = GH;
+        if (! waveImg.isValid()) waveImg = Image (Image::ARGB, w, h, true);
+
+        int n = (pos - waveLastPos) & (PotatoKickerProcessor::scopeSize - 1);
+        waveLastPos = pos;
+        n = jmin (n, PotatoKickerProcessor::scopeSize / 2);
+        if (n <= 0) return;
+        waveBuf.resize ((size_t) n);
+        proc.copyScope (waveBuf.data(), n, pos);
+
+        const int samplesPerCol = jmax (1, (int) std::round (srate / (double) wavePxPerSec));
+        auto pole = [srate] (float hz) { return std::exp (-MathConstants<float>::twoPi * hz / (float) srate); };
+        const float c[5] = { pole (60.0f), pole (250.0f), pole (500.0f), pole (2000.0f), pole (6000.0f) };
+        auto envCoef = [srate] (float secs) { return std::exp (-1.0f / ((float) srate * secs)); };
+        const float kFastA = envCoef (0.001f), kFastR = envCoef (0.030f), kSlowA = envCoef (0.060f), kSlowR = envCoef (0.300f);
+        const float kHoldDecay = envCoef (0.10f);
+        const float cy = (float) h * 0.5f, half = (float) h * 0.47f;
+
+        static const Colour bands[6] { Colour (0xff4a2fd0), Colour (0xff2f8dff), Colour (0xffc040d8),
+                                       Colour (0xffff5c78), Colour (0xffffa63e), Colour (0xffffe8c2) };
+        static const Colour kickCol (0xff230a36), edgeCol (0xffffb46e);
+        static const float gain[6] { 1.0f, 1.0f, 1.3f, 1.6f, 2.2f, 3.0f };
+
+        for (int i = 0; i < n; ++i)
+        {
+            const float x = waveBuf[(size_t) i];
+            float lp[5];
+            for (int k = 0; k < 5; ++k)
+            {
+                auto& s1 = waveLp[(size_t) (k * 2)];
+                auto& s2 = waveLp[(size_t) (k * 2 + 1)];
+                s1 = x + c[k] * (s1 - x);
+                s2 = s1 + c[k] * (s2 - s1);
+                lp[k] = s2;
+            }
+            const float band[6] { lp[0], lp[1] - lp[0], lp[2] - lp[1], lp[3] - lp[2], lp[4] - lp[3], x - lp[4] };
+            for (size_t k = 0; k < 6; ++k) wBand[k] += band[k] * band[k];
+
+            const float lo = std::abs (lp[1]);
+            kickFast = lo + (lo > kickFast ? kFastA : kFastR) * (kickFast - lo);
+            kickSlow = lo + (lo > kickSlow ? kSlowA : kSlowR) * (kickSlow - lo);
+            const float kickness = jlimit (0.0f, 1.0f, (kickFast - 1.25f * kickSlow) / (kickFast + 1.0e-6f) * 3.0f);
+            kickHold = jmax (kickness, kickHold * kHoldDecay);
+            wKick = jmax (wKick, kickHold);
+            wPeak = jmax (wPeak, std::abs (x));
+            peakHold = jmax (peakHold * 0.99997f, std::abs (x));
+
+            if (++waveColCount < samplesPerCol) continue;
+
+            float e[6], sum = 1.0e-9f, ms = 0.0f;
+            for (size_t k = 0; k < 6; ++k)
+            {
+                ms += wBand[k];
+                e[k] = std::sqrt (wBand[k] / (float) samplesPerCol) * gain[k];
+                sum += e[k];
+            }
+            for (size_t k = 0; k < 6; ++k) waveShare[k] += (e[k] / sum - waveShare[k]) * 0.35f;
+            waveKickSm += (wKick - waveKickSm) * 0.5f;
+
+            const float rms = std::sqrt (ms / (float) samplesPerCol);
+            auto heightOf = [&] (float amp) { return half * std::pow (jlimit (0.0f, 1.0f, amp), 0.75f); };
+            const float body = jmax (1.0f, heightOf (rms * 1.6f));
+            const float halo = jmax (body, heightOf (wPeak));
+
+            ColourGradient grad;
+            grad.isRadial = false;
+            float acc = 0.0f;
+            bool first = true;
+            for (int k = 5; k >= 0; --k)
+            {
+                const float sh = waveShare[(size_t) k];
+                auto col = bands[k];
+                if (k <= 1) col = col.interpolatedWith (kickCol, jlimit (0.0f, 0.75f, waveKickSm * 0.75f));
+                const float p = jlimit (0.0f, 1.0f, acc + sh * 0.5f);
+                if (first) { grad.addColour (0.0, col.brighter (0.25f)); first = false; }
+                if (p > 0.0f && p < 1.0f) grad.addColour ((double) p, col);
+                acc += sh;
+            }
+            const auto outer = bands[0].interpolatedWith (kickCol, jlimit (0.0f, 0.75f, waveKickSm * 0.75f));
+            grad.addColour (1.0, outer.interpolatedWith (edgeCol, 0.35f));
+
+            waveImg.moveImageSection (0, 0, 1, 0, w - 1, h);
+            waveImg.clear ({ w - 1, 0, 1, h });
+            Graphics gi (waveImg);
+            const float xc = (float) (w - 1);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                auto gr = grad;
+                gr.point1 = { xc, cy };
+                gr.point2 = { xc, cy + side * body };
+                gi.setGradientFill (gr);
+                gi.fillRect (xc, side < 0 ? cy - body : cy, 1.0f, body);
+                if (halo > body + 0.5f)
+                {
+                    gi.setGradientFill (ColourGradient (edgeCol.withAlpha (0.38f), xc, cy + side * body, edgeCol.withAlpha (0.0f), xc, cy + side * halo, false));
+                    gi.fillRect (xc, side < 0 ? cy - halo : cy + body, 1.0f, halo - body);
+                }
+            }
+            waveColCount = 0;
+            wPeak = wKick = 0.0f;
+            wBand.fill (0.0f);
+        }
+        wavePeakDb = 20.0f * std::log10 (peakHold + 1.0e-9f);
+    }
+
+    void drawWave (Graphics& g)
+    {
+        g.setGradientFill (ColourGradient (Colour (0xff0b0d14), 0, 0, Colour (0xff030407), 0, (float) CH, false));
+        g.fillRect (0, 0, CW, CH);
+
+        // mirrored dB guides
+        const float cy = PT + GH * 0.5f, half = GH * 0.47f;
+        g.setFont (mono (10.5f));
+        for (int db : { 0, -6, -12, -24 })
+        {
+            const float off = half * std::pow (std::pow (10.0f, db / 20.0f), 0.75f);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                const float y = std::round (cy + side * off);
+                g.setColour (Colours::white.withAlpha (db == 0 ? 0.10f : 0.06f));
+                g.drawHorizontalLine ((int) y, (float) PL, (float) (PL + GW));
+                g.setColour (Colours::white.withAlpha (0.32f));
+                g.drawText (String (db), Rectangle<float> (0, y - 7, (float) PL - 5, 14), Justification::centredRight, false);
+            }
+        }
+        for (int s = 0; s <= 2; ++s)   // one second per division, newest at the right
+        {
+            const float x = (float) (PL + GW) - s * wavePxPerSec;
+            g.setColour (Colours::white.withAlpha (0.05f)); g.drawVerticalLine (roundToInt (x), (float) PT, (float) (PT + GH));
+            g.setColour (Colours::white.withAlpha (0.32f));
+            g.drawText (s == 0 ? String ("now") : "-" + String (s) + "s", Rectangle<float> (x - 40, CH - 16.0f, 40, 14), Justification::centredRight, false);
+        }
+
+        if (waveImg.isValid()) g.drawImageAt (waveImg, PL, PT);
+
+        // glowing horizon: white-hot core fading through amber to blue at the edges
+        ColourGradient hz (Colour (0xff2e8bff).withAlpha (0.0f), (float) PL, cy, Colour (0xff2e8bff).withAlpha (0.0f), (float) (PL + GW), cy, false);
+        hz.addColour (0.20, Colour (0xffffa63e).withAlpha (0.22f));
+        hz.addColour (0.45, Colour (0xffffe8c2).withAlpha (0.38f));
+        hz.addColour (0.75, Colour (0xff8fb8ff).withAlpha (0.22f));
+        g.setGradientFill (hz); g.fillRect ((float) PL, cy - 3.0f, (float) GW, 7.0f);
+        hz.multiplyOpacity (1.8f);
+        g.setGradientFill (hz); g.fillRect ((float) PL, cy, (float) GW, 1.0f);
+
+        // "now" line at the right edge
+        const float x = (float) (PL + GW) - 1.0f;
+        g.setColour (Colour (0xff3ba7ff).withAlpha (0.25f)); g.fillRect (x - 3.0f, (float) PT, 6.0f, (float) GH);
+        g.setColour (Colour (0xff3ba7ff).brighter (0.6f));    g.fillRect (x, (float) PT, 1.0f, (float) GH);
+    }
+
+    Image waveImg;
+    std::vector<float> waveBuf;
+    int waveLastPos = -1, waveColCount = 0;
+    std::array<float, 10> waveLp {};
+    std::array<float, 6> wBand {}, waveShare { 1.0f / 6, 1.0f / 6, 1.0f / 6, 1.0f / 6, 1.0f / 6, 1.0f / 6 };
+    float kickFast = 0.0f, kickSlow = 0.0f, kickHold = 0.0f, wKick = 0.0f, wPeak = 0.0f, waveKickSm = 0.0f;
+    float peakHold = 0.0f, wavePeakDb = -90.0f;
 
     PotatoKickerProcessor& proc;
     HashMap<String, RangedAudioParameter*> params;
@@ -1120,15 +1298,16 @@ public:
         addAndMakeVisible (*waveSwitch);
         waveSwitch->setBounds (15, 64, 152, 140);
 
-        knob (pk::id::tune,   "TUNE",       100, 225, 140);
-        knob (pk::id::pamt,   "PITCH AMT",   92,  95, 292);
-        knob (pk::id::pdec,   "PITCH TIME",  92, 225, 292);
-        knob (pk::id::click,  "CLICK",       84,  95, 445);
-        knob (pk::id::drive,  "DRIVE",       84, 225, 445);
-        knob (pk::id::thr,    "THRESHOLD",   92, 975, 300);
-        knob (pk::id::ratio,  "RATIO",       92, 1105, 300);
-        knob (pk::id::makeup, "MAKEUP",      80, 975, 432);
-        knob (pk::id::vol,    "VOLUME",      88, 1040, 550);
+        const Colour white (0xffd9dde2);   // white light-pipe for the non-envelope knobs
+        knob (pk::id::tune,   "TUNE",       100, 225, 140)->setAccent (white, Colours::white);
+        knob (pk::id::pamt,   "PITCH AMT",   92,  95, 292)->setAccent (white, Colours::white);
+        knob (pk::id::pdec,   "PITCH TIME",  92, 225, 292)->setAccent (white, Colours::white);
+        knob (pk::id::click,  "CLICK",       84,  95, 445)->setAccent (white, Colours::white);
+        knob (pk::id::drive,  "DRIVE",       84, 225, 445)->setAccent (white, Colours::white);
+        knob (pk::id::thr,    "THRESHOLD",   92, 975, 300)->setAccent (white, Colours::white);
+        knob (pk::id::ratio,  "RATIO",       92, 1105, 300)->setAccent (white, Colours::white);
+        knob (pk::id::makeup, "MAKEUP",      80, 975, 432)->setAccent (white, Colours::white);
+        knob (pk::id::vol,    "VOLUME",      88, 1040, 550)->setAccent (white, Colours::white);
         knob (pk::id::atk,    "ATTACK",     100, 390, 492)->setAccent (Colour (0xff5a1aa8), Colour (0xffb98cff));   // dark purple
         knob (pk::id::dec,    "DECAY",      100, 530, 492)->setAccent (Colour (0xff1550d8), Colour (0xff8cc2ff));   // blue
         knob (pk::id::sus,    "SUSTAIN",    100, 670, 492)->setAccent (Colour (0xffd85a08), Colour (0xffffb46a));   // orange
@@ -1234,7 +1413,7 @@ public:
         g.setFont (label (22.0f, 0.3f, true));
         g.drawText ("VST3", Rectangle<float> (1050, 652, 118, 26), Justification::centredRight, false);
         g.setColour (col::inkDim); g.setFont (mono (12.0f));
-        g.drawText (CharPointer_UTF8 ("WIN 11 \xc2\xb7 x64"), Rectangle<float> (1050, 680, 118, 14), Justification::centredRight, false);
+        g.drawText (CharPointer_UTF8 ("WIN 11 \xc2\xb7 macOS"), Rectangle<float> (1030, 680, 138, 14), Justification::centredRight, false);
         g.drawText (CharPointer_UTF8 ("100 PRESETS"), Rectangle<float> (1050, 695, 118, 14), Justification::centredRight, false);
     }
 
