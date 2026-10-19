@@ -5,8 +5,7 @@
 #include "Presets.h"
 #include "KickEngine.h"
 
-class PotatoKickerProcessor : public juce::AudioProcessor,
-                              private juce::AsyncUpdater
+class PotatoKickerProcessor : public juce::AudioProcessor
 {
 public:
     PotatoKickerProcessor();
@@ -26,10 +25,14 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 3.0; }
 
-    int getNumPrograms() override { return pk::numPresets; }
-    int getCurrentProgram() override { return currentPreset.load(); }
-    void setCurrentProgram (int index) override;
-    const juce::String getProgramName (int index) override;
+    // The factory presets are deliberately NOT exposed to the host as programs. Hosts such as Cubase re-send
+    // the track's program (or forward MIDI program changes) when a track is selected, which would replace the
+    // user's settings with a factory preset. Presets are chosen only in the plugin's own browser, and the full
+    // sound is saved with the project / host presets through the plugin state.
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return "Potato-Kicker"; }
     void changeProgramName (int, const juce::String&) override {}
 
     void getStateInformation (juce::MemoryBlock& destData) override;
@@ -68,8 +71,6 @@ private:
         std::atomic<float>* wave; std::atomic<float>* comp; std::atomic<float>* stereo;
         std::atomic<float>* keytrack; std::atomic<float>* velocity;
     } raw {};
-    void handleAsyncUpdate() override;
-    std::atomic<int> pendingPreset { -1 };
     int notesDown = 0;
     std::array<std::atomic<float>, scopeSize> scope {};
     std::atomic<int> scopePos { 0 };

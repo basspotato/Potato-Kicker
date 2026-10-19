@@ -15,7 +15,7 @@ A kick drum and bass generator for EDM, built as a VST3 instrument for Windows 1
 - **Look:** orange-and-yellow light-up console with backlit knob rings, an output level LED bar and the SPUD-01 potato emblem.
 - **Display:** shows the rendered sound. Its Amp, Pitch and Comp tabs each have points you can drag with the mouse, and the Wave tab shows the live output as a scrolling, colour-coded waveform.
 - **MIDI:** Key Track (C1 plays the Tune pitch, other notes transpose from there) and Velocity on/off. Works on any MIDI track, for example in Cubase.
-- **100 factory presets:** 10 each for House, Tech-House, Techno, EDM, Festival, Progressive, Drum & Bass, Dubstep, Analog and Trap. They're also exposed to the DAW's program list.
+- **100 factory presets:** 10 each for House, Tech-House, Techno, EDM, Festival, Progressive, Drum & Bass, Dubstep, Analog and Trap, chosen in the plugin's preset browser. They are not exposed as host programs, so selecting a track or sending MIDI program changes never replaces your sound. Your full settings save with the project and in the DAW's own preset system.
 
 ## Getting the plugin
 

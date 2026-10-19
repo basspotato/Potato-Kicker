@@ -124,35 +124,6 @@ void PotatoKickerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     meterGr = gr;
 }
 
-// Host-initiated program changes. Cubase restores the program when a project loads and may do that from
-// the audio thread; parameter notifications must never be sent back to the host from there, so the preset
-// is applied on the message thread. Re-selecting the current program is ignored so a project's saved knob
-// settings are not overwritten by the factory preset during load.
-void PotatoKickerProcessor::setCurrentProgram (int index)
-{
-    index = juce::jlimit (0, pk::numPresets - 1, index);
-    if (index == currentPreset.load() && pendingPreset.load() < 0)
-        return;
-
-    if (juce::MessageManager::existsAndIsCurrentThread())
-    {
-        pendingPreset = -1;
-        loadPreset (index, false);
-    }
-    else
-    {
-        pendingPreset = index;
-        triggerAsyncUpdate();
-    }
-}
-
-void PotatoKickerProcessor::handleAsyncUpdate()
-{
-    const int index = pendingPreset.exchange (-1);
-    if (index >= 0)
-        loadPreset (index, false);
-}
-
 void PotatoKickerProcessor::loadPreset (int index, bool asUserGesture)
 {
     index = juce::jlimit (0, pk::numPresets - 1, index);
@@ -184,12 +155,6 @@ bool PotatoKickerProcessor::presetIsModified() const
     return false;
 }
 
-const juce::String PotatoKickerProcessor::getProgramName (int index)
-{
-    index = juce::jlimit (0, pk::numPresets - 1, index);
-    return juce::String (pk::genreNames[index / pk::presetsPerGenre]) + " - " + pk::presets[index].name;
-}
-
 void PotatoKickerProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
@@ -205,7 +170,6 @@ void PotatoKickerProcessor::setStateInformation (const void* data, int sizeInByt
         if (xml->hasTagName (apvts.state.getType()))
         {
             auto tree = juce::ValueTree::fromXml (*xml);
-            pendingPreset = -1;
             currentPreset = juce::jlimit (0, pk::numPresets - 1, (int) tree.getProperty ("preset", 10));
             apvts.replaceState (tree);
         }
