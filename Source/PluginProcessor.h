@@ -5,7 +5,8 @@
 #include "Presets.h"
 #include "KickEngine.h"
 
-class PotatoKickerProcessor : public juce::AudioProcessor
+class PotatoKickerProcessor : public juce::AudioProcessor,
+                              private juce::AsyncUpdater
 {
 public:
     PotatoKickerProcessor();
@@ -27,7 +28,7 @@ public:
 
     int getNumPrograms() override { return pk::numPresets; }
     int getCurrentProgram() override { return currentPreset.load(); }
-    void setCurrentProgram (int index) override { loadPreset (index); }
+    void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int, const juce::String&) override {}
 
@@ -35,7 +36,7 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     // Used by the editor
-    void loadPreset (int index);
+    void loadPreset (int index, bool asUserGesture = true);
     bool presetIsModified() const;
     pk::EngineParams readParams() const;
 
@@ -67,6 +68,8 @@ private:
         std::atomic<float>* wave; std::atomic<float>* comp; std::atomic<float>* stereo;
         std::atomic<float>* keytrack; std::atomic<float>* velocity;
     } raw {};
+    void handleAsyncUpdate() override;
+    std::atomic<int> pendingPreset { -1 };
     int notesDown = 0;
     std::array<std::atomic<float>, scopeSize> scope {};
     std::atomic<int> scopePos { 0 };

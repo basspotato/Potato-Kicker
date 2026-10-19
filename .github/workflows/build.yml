@@ -50,13 +50,13 @@ jobs:
           Invoke-WebRequest -Uri "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip" -OutFile pluginval.zip
           Expand-Archive pluginval.zip -DestinationPath pluginval
           $exe = Get-ChildItem -Path pluginval -Recurse -Filter pluginval.exe | Select-Object -First 1
-          & $exe.FullName --strictness-level 5 --validate-in-process --timeout-ms 120000 --validate "build/PotatoKicker_artefacts/Release/VST3/Potato-Kicker.vst3" *>&1 | Tee-Object -FilePath pluginval.log
+          & $exe.FullName --strictness-level 10 --validate-in-process --timeout-ms 120000 --validate "build/PotatoKicker_artefacts/Release/VST3/Potato-Kicker.vst3" *>&1 | Tee-Object -FilePath pluginval.log
           if ($LASTEXITCODE -ne 0) {
             $tail = (Get-Content pluginval.log -Tail 40) -join '%0A'
             Write-Output "::error title=pluginval failed::$tail"
             exit 1
           }
-          Write-Output "::notice title=pluginval::Passed at strictness level 5"
+          Write-Output "::notice title=pluginval::Passed at strictness level 10"
 
   macos:
     runs-on: macos-latest
@@ -105,9 +105,9 @@ jobs:
           unzip -q pluginval.zip -d pluginval
           PV=$(find pluginval -type f -path "*MacOS/pluginval" | head -1)
           set -o pipefail
-          "$PV" --strictness-level 5 --validate-in-process --timeout-ms 120000 --validate build/PotatoKicker_artefacts/Release/VST3/Potato-Kicker.vst3 2>&1 | tee pluginval.log \
+          "$PV" --strictness-level 10 --validate-in-process --timeout-ms 120000 --validate build/PotatoKicker_artefacts/Release/VST3/Potato-Kicker.vst3 2>&1 | tee pluginval.log \
             || { echo "::error title=pluginval failed (macOS)::$(tail -40 pluginval.log | sed ':a;N;$!ba;s/\n/%0A/g')"; exit 1; }
-          echo "::notice title=pluginval (macOS)::Passed at strictness level 5"
+          echo "::notice title=pluginval (macOS)::Passed at strictness level 10"
 
       - name: Validate AU with auval
         run: |

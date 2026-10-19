@@ -144,7 +144,7 @@ namespace
     // each coloured from the ramp, so the light fades from orange at the start to yellow at the end
     void strokeRampArc (Graphics& g, Point<float> c, float r, float t0, float t1, float width, float alpha, float bright = 0.0f)
     {
-        const int n = jmax (2, (int) ((t1 - t0) * 72.0f));
+        const int n = jmax (2, (int) ((t1 - t0) * 40.0f));
         for (int i = 0; i < n; ++i)
         {
             const float a = t0 + (t1 - t0) * (float) i / (float) n, b = t0 + (t1 - t0) * (float) (i + 1) / (float) n;
@@ -157,11 +157,11 @@ namespace
     // Full ring lit with the ramp: orange at the bottom, yellow at the top
     void strokeRampRing (Graphics& g, Point<float> c, float r, float width, float alpha)
     {
-        for (int i = 0; i < 72; ++i)
+        for (int i = 0; i < 36; ++i)
         {
-            const float a = i * 5.0f, b = a + 5.0f;
+            const float a = i * 10.0f, b = a + 10.0f;
             Path seg; seg.addCentredArc (c.x, c.y, r, r, 0.0f, degToRad (a), degToRad (b), true);
-            g.setColour (ramp (0.5f * (1.0f + std::cos (degToRad (a + 2.5f)))).withAlpha (alpha));
+            g.setColour (ramp (0.5f * (1.0f + std::cos (degToRad (a + 5.0f)))).withAlpha (alpha));
             g.strokePath (seg, PathStrokeType (width, PathStrokeType::curved, PathStrokeType::butt));
         }
     }
@@ -511,12 +511,17 @@ public:
         {
             last = now;
             renderPreview();
+            screenDirty = true;
         }
         const auto cnt = proc.noteOnCounter.load();
         if (cnt != lastCounter) { lastCounter = cnt; playStart = Time::getMillisecondCounterHiRes(); }
-        grShow += (proc.meterGr.load() - grShow) * 0.2f;
+        const float gr = proc.meterGr.load();
+        const bool grMoving = std::abs (gr - grShow) > 0.01f;
+        grShow += (gr - grShow) * 0.2f;
         feedWave();
-        repaint();
+        const bool playheadActive = playStart > 0.0 && (Time::getMillisecondCounterHiRes() - playStart) / 1000.0 < T + 0.1;
+        if (screenDirty || playheadActive || view == 3 || (view == 2 && grMoving))
+            repaint();
     }
 
     void paint (Graphics& g) override
@@ -565,7 +570,23 @@ public:
             Graphics::ScopedSaveState s (g);
             g.setOrigin (scr.getPosition());
             g.reduceClipRegion (Rectangle<int> (0, 0, CW, CH));
-            drawScreen (g);
+            if (view == 3)
+                drawWave (g);
+            else
+            {
+                // The static part of the screen is rendered in software at 2x and only when something changes,
+                // so each frame is a single image draw plus the live playhead / gain-reduction overlay
+                if (screenDirty || ! screenCache.isValid())
+                {
+                    screenCache = Image (Image::ARGB, CW * 2, CH * 2, true, SoftwareImageType());
+                    Graphics gi (screenCache);
+                    gi.addTransform (AffineTransform::scale (2.0f));
+                    drawScreen (gi);
+                    screenDirty = false;
+                }
+                g.drawImage (screenCache, Rectangle<float> (0.0f, 0.0f, (float) CW, (float) CH));
+                drawLive (g);
+            }
         }
         g.setColour (col::line.withAlpha (0.25f)); g.drawRoundedRectangle (scr.toFloat(), 7.0f, 1.0f);
 
@@ -583,12 +604,12 @@ public:
     void mouseDown (const MouseEvent& e) override
     {
         for (int i = 0; i < 4; ++i)
-            if (tabRect (i).contains (e.position)) { view = i; hover = {}; repaint(); return; }
+            if (tabRect (i).contains (e.position)) { view = i; hover = {}; screenDirty = true; repaint(); return; }
 
         const auto p = toScreen (e.position);
         const auto id = hitNode (p);
         if (id.isEmpty()) return;
-        drag = id; dragT = T; dragGate = gate;
+        drag = id; dragT = T; dragGate = gate; screenDirty = true;
         for (auto* prm : paramsFor (id)) prm->beginChangeGesture();
     }
 
@@ -619,6 +640,7 @@ public:
         if (drag.isNotEmpty())
             for (auto* prm : paramsFor (drag)) prm->endChangeGesture();
         drag = {};
+        screenDirty = true; repaint();
         setMouseCursor (hover.isNotEmpty() ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
     }
 
@@ -629,10 +651,11 @@ public:
         {
             hover = h;
             setMouseCursor (h.isNotEmpty() ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
+            screenDirty = true;
             repaint();
         }
     }
-    void mouseExit (const MouseEvent&) override { if (drag.isEmpty()) hover = {}; }
+    void mouseExit (const MouseEvent&) override { if (drag.isEmpty() && hover.isNotEmpty()) { hover = {}; screenDirty = true; repaint(); } }
 
 private:
     static constexpr int CW = 520, CH = 262, PL = 40, PR = 12, PT = 12, PB = 22, GW = CW - PL - PR, GH = CH - PT - PB;
@@ -753,6 +776,28 @@ private:
         for (float s : { 0.005f, 0.01f, 0.02f, 0.05f, 0.1f, 0.2f, 0.25f, 0.5f, 1.0f })
             if (t / s <= 8.0f) return s;
         return 1.0f;
+    }
+
+    // Parts of the screen that change every frame: the playhead and the gain-reduction meter
+    void drawLive (Graphics& g)
+    {
+        if (view < 2 && playStart > 0.0)
+        {
+            const float t = (float) ((Time::getMillisecondCounterHiRes() - playStart) / 1000.0);
+            if (t < T)
+            {
+                g.setColour (Colours::white.withAlpha (0.55f));
+                g.drawVerticalLine (roundToInt (tx (t)), (float) PT, (float) (PT + GH));
+            }
+        }
+        if (view == 2)
+        {
+            const float h = jmin ((float) GH, grShow / 24.0f * GH);
+            g.setColour (col::led.withAlpha (0.15f)); g.fillRect ((float) (PL + GW - 16), (float) PT, 10.0f, (float) GH);
+            g.setColour (Colour (0xffff3b2c)); g.fillRect ((float) (PL + GW - 16), (float) PT, 10.0f, h);
+            g.setColour (col::amber.withAlpha (0.6f)); g.setFont (mono (10.5f));
+            g.drawText (last.comp ? "GR " + String (grShow, 1) + " dB" : "BYPASSED", Rectangle<float> ((float) (PL + GW - 140), (float) PT + 2, 116, 12), Justification::centredRight, false);
+        }
     }
 
     void drawScreen (Graphics& g)
@@ -905,23 +950,8 @@ private:
             g.setColour (col::orange.withAlpha (0.3f * a)); g.strokePath (curve, PathStrokeType (6.0f));
             auto cg = ColourGradient (col::orange.withAlpha (a), (float) PL, 0, col::yellow.withAlpha (a), (float) (PL + GW), 0, false);
             g.setGradientFill (cg); g.strokePath (curve, PathStrokeType (2.2f));
-            const float h = jmin ((float) GH, grShow / 24.0f * GH);
-            g.setColour (col::led.withAlpha (0.15f)); g.fillRect ((float) (PL + GW - 16), (float) PT, 10.0f, (float) GH);
-            g.setColour (Colour (0xffff3b2c)); g.fillRect ((float) (PL + GW - 16), (float) PT, 10.0f, h);
             g.setColour (col::amber.withAlpha (0.6f)); g.setFont (mono (10.5f));
-            g.drawText (last.comp ? "GR " + String (grShow, 1) + " dB" : "BYPASSED", Rectangle<float> ((float) (PL + GW - 140), (float) PT + 2, 116, 12), Justification::centredRight, false);
             g.drawText (CharPointer_UTF8 ("IN dB \xe2\x86\x92"), Rectangle<float> ((float) PL + 4, (float) (PT + GH - 14), 80, 12), Justification::centredLeft, false);
-        }
-
-        // playhead
-        if (view < 2 && playStart > 0.0)
-        {
-            const float t = (float) ((Time::getMillisecondCounterHiRes() - playStart) / 1000.0);
-            if (t < T)
-            {
-                g.setColour (Colours::white.withAlpha (0.55f));
-                g.drawVerticalLine (roundToInt (tx (t)), (float) PT, (float) (PT + GH));
-            }
         }
 
         // nodes
@@ -958,7 +988,7 @@ private:
         if (view != 3 || waveLastPos < 0) { waveLastPos = pos; if (view != 3) return; }
         const double srate = proc.getSampleRate() > 0.0 ? proc.getSampleRate() : 48000.0;
         const int w = GW, h = GH;
-        if (! waveImg.isValid()) waveImg = Image (Image::ARGB, w, h, true);
+        if (! waveImg.isValid()) waveImg = Image (Image::ARGB, w, h, true, SoftwareImageType());   // CPU-side: updated a column at a time
 
         int n = (pos - waveLastPos) & (PotatoKickerProcessor::scopeSize - 1);
         waveLastPos = pos;
@@ -1117,7 +1147,8 @@ private:
         g.setColour (col::yellow.brighter (0.4f));    g.fillRect (x, (float) PT, 1.0f, (float) GH);
     }
 
-    Image waveImg;
+    Image waveImg, screenCache;
+    bool screenDirty = true;
     std::vector<float> waveBuf;
     int waveLastPos = -1, waveColCount = 0;
     std::array<float, 10> waveLp {};

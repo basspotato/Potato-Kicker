@@ -30,7 +30,7 @@ PotatoKickerProcessor::PotatoKickerProcessor()
     raw.keytrack = apvts.getRawParameterValue (pk::id::keytrack);
     raw.velocity = apvts.getRawParameterValue (pk::id::velocity);
 
-    loadPreset (currentPreset.load());
+    loadPreset (currentPreset.load(), false);
 }
 
 bool PotatoKickerProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -46,7 +46,7 @@ pk::EngineParams PotatoKickerProcessor::readParams() const
     p.atk = raw.f[3]->load();  p.dec = raw.f[4]->load();  p.sus = raw.f[5]->load();  p.rel = raw.f[6]->load();
     p.click = raw.f[7]->load(); p.drive = raw.f[8]->load();
     p.thr = raw.f[9]->load();  p.ratio = raw.f[10]->load(); p.makeup = raw.f[11]->load(); p.vol = raw.f[12]->load();
-    p.wave = juce::jlimit (0, 3, (int) raw.wave->load());
+    p.wave = juce::jlimit (0, pk::waveNames.size() - 1, (int) raw.wave->load());
     p.comp = raw.comp->load() > 0.5f;
     p.stereo = raw.stereo->load() > 0.5f;
     p.keytrack = raw.keytrack->load() > 0.5f;
@@ -68,6 +68,10 @@ void PotatoKickerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     juce::ScopedNoDenormals noDenormals;
     const int numSamples = buffer.getNumSamples();
     keyboardState.processNextMidiBuffer (midi, 0, numSamples, true);
+
+    // Hosts may call process with the output bus deactivated (no channels) or with an empty block
+    if (buffer.getNumChannels() == 0 || numSamples == 0)
+        return;
 
     engine.setParams (readParams());
 
@@ -120,17 +124,47 @@ void PotatoKickerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     meterGr = gr;
 }
 
-void PotatoKickerProcessor::loadPreset (int index)
+// Host-initiated program changes. Cubase restores the program when a project loads and may do that from
+// the audio thread; parameter notifications must never be sent back to the host from there, so the preset
+// is applied on the message thread. Re-selecting the current program is ignored so a project's saved knob
+// settings are not overwritten by the factory preset during load.
+void PotatoKickerProcessor::setCurrentProgram (int index)
+{
+    index = juce::jlimit (0, pk::numPresets - 1, index);
+    if (index == currentPreset.load() && pendingPreset.load() < 0)
+        return;
+
+    if (juce::MessageManager::existsAndIsCurrentThread())
+    {
+        pendingPreset = -1;
+        loadPreset (index, false);
+    }
+    else
+    {
+        pendingPreset = index;
+        triggerAsyncUpdate();
+    }
+}
+
+void PotatoKickerProcessor::handleAsyncUpdate()
+{
+    const int index = pendingPreset.exchange (-1);
+    if (index >= 0)
+        loadPreset (index, false);
+}
+
+void PotatoKickerProcessor::loadPreset (int index, bool asUserGesture)
 {
     index = juce::jlimit (0, pk::numPresets - 1, index);
     const auto& p = pk::presets[index];
     currentPreset = index;
 
-    auto set = [] (juce::RangedAudioParameter* prm, float value)
+    // Gestures are only sent for presets chosen in the editor; host-driven changes just update the values
+    auto set = [asUserGesture] (juce::RangedAudioParameter* prm, float value)
     {
-        prm->beginChangeGesture();
+        if (asUserGesture) prm->beginChangeGesture();
         prm->setValueNotifyingHost (prm->convertTo0to1 (value));
-        prm->endChangeGesture();
+        if (asUserGesture) prm->endChangeGesture();
     };
     set (apvts.getParameter (pk::id::wave), (float) p.wave);
     for (int i = 0; i < 13; ++i)
@@ -171,6 +205,7 @@ void PotatoKickerProcessor::setStateInformation (const void* data, int sizeInByt
         if (xml->hasTagName (apvts.state.getType()))
         {
             auto tree = juce::ValueTree::fromXml (*xml);
+            pendingPreset = -1;
             currentPreset = juce::jlimit (0, pk::numPresets - 1, (int) tree.getProperty ("preset", 10));
             apvts.replaceState (tree);
         }
